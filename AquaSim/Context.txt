@@ -1,0 +1,533 @@
+# AQUA SIM — CONTEXT & ARCHITECTURE REFERENCE
+**Version:** v9 (AquaSim_v9.html)  
+**Last updated:** Session 3  
+**Purpose:** Upload this file at the start of any new session so Claude understands the full codebase without re-reading the game file.
+
+---
+
+## FILE STRUCTURE (current: single HTML)
+
+```
+AquaSim_v9.html
+ └── <style>          CSS (inline)
+ └── <body>           HTML shell
+ └── <script>         All JS (single block, ~1941 lines)
+      ├── AQUA.BUS           Event bus
+      ├── AQUA.ITEMS         Pure data table (species, equipment, consumables)
+      ├── AQUA.FX            Effect resolver
+      ├── AQUA.GENETICS      Gene scaffold
+      ├── AQUA.CHEM_HISTORY  Rolling chemistry log
+      ├── AQUA.SIM           Pure simulation engine (tick/calcDeltas)
+      ├── AQUA.G             Live game state (mutable singleton)
+      ├── AQUA.initState()   State factory
+      ├── AQUA.makeFish()    Fish instance factory
+      ├── AQUA.makeCleaner() Cleaner instance factory
+      ├── AQUA.save/load     localStorage persistence
+      ├── AQUA.actions       Player-triggered actions
+      ├── AQUA.panels        Tabbed UI controller
+      ├── AQUA.RENDER_ADAPTER Sprite registry (decoupled from renderer)
+      ├── AQUA.ui            DOM event bridge + status renderers
+      ├── AQUA.shop          Store UI
+      ├── AQUA.renderer      Canvas pixel-art renderer (IIFE)
+      ├── AQUA.edu           Educational popup system
+      └── AQUA.intro         Intro screen
+```
+
+### Planned file split (next major refactor):
+```
+aquasim.html          Shell only — imports all JS, contains CSS
+js/bus.js             AQUA.BUS
+js/items.js           AQUA.ITEMS
+js/fx.js              AQUA.FX
+js/genetics.js        AQUA.GENETICS
+js/chem_history.js    AQUA.CHEM_HISTORY
+js/sim.js             AQUA.SIM (pure engine — no DOM, no AQUA.G)
+js/state.js           AQUA.G, initState, makeFish, makeCleaner, save/load
+js/actions.js         AQUA.actions
+js/panels.js          AQUA.panels
+js/render_adapter.js  AQUA.RENDER_ADAPTER
+js/ui.js              AQUA.ui (DOM bridge)
+js/shop.js            AQUA.shop
+js/renderer.js        AQUA.renderer (canvas loop)
+js/edu.js             AQUA.edu
+js/intro.js           AQUA.intro
+```
+
+---
+
+## GAME STATE — AQUA.G (the mutable singleton)
+
+```js
+AQUA.G = {
+  version:     5,           // Save schema version (bump when state shape changes)
+  day:         1,           // Current day number
+  fed:         false,       // Was fish fed this day? Reset to false on advanceDay()
+  money:       50,          // Player currency ($)
+  phase:       'survive',   // Goal phase: 'survive' | 'grow_plant' | 'sell_plant'
+  over:        false,       // Game ended (win or loss)
+  surf:        45,          // Total biofilm surface area (cm²) from equipment
+  tempStable:  false,       // True if heater installed
+  anoxicDays:  0,           // Consecutive days with O2 < 1.5 ppm + organic > 0.3
+
+  chem: {                   // Water chemistry (all in ppm unless noted)
+    ph:    7.0,             // pH (5–9.5 range, computed from CO2 each tick)
+    nh3:   0,               // Ammonia — toxic above 0.2 ppm, lethal ~0.5+
+    no2:   0,               // Nitrite — toxic above 0.3 ppm, lethal ~0.8+
+    no3:   0,               // Nitrate — safe <40, harmful >80 ppm
+    o2:    8.5,             // Dissolved oxygen — min viable ~4, crash <2
+    co2:   3.0,             // Carbon dioxide — plants need >5, risk >20
+    temp:  76,              // Temperature °F (affects Q10 metabolism scaling)
+    org:   0,               // Organic waste load (dimensionless 0–3+)
+    bact:  0.05,            // Bacteria colony strength (0–1, starts tiny)
+    po4:   0                // Phosphate — algae fuel, harmful >1 ppm
+  },
+
+  fish:        [],          // Array of fish instances (see Fish Instance below)
+  cleaners:    [],          // Array of cleaner instances (shrimp, snails)
+  plants:      [],          // Array of plant instances (live + fake)
+  equip:       [],          // Array of equipment keys (strings) owned
+  bubbles:     [],          // Visual-only bubble particles for renderer
+  algae:       0,           // Algae biomass (dimensionless 0–10+)
+  chemHistory: []           // Rolling 60-day array of ChemSnapshot objects
+}
+```
+
+### Fish Instance
+```js
+{
+  key:    'goldfish',       // AQUA.ITEMS key
+  alive:  true,
+  health: 100,              // 0–100. At 0: dies
+  stress: 0,                // 0–100. Adds to health damage each tick
+  mass:   5,                // grams (affects O2 consumption, waste, sprite scale)
+  x: 160, y: 130,          // Canvas position (pixels)
+  vx: 0.7, vy: 0.2,        // Velocity (pixels/frame)
+  dir: 1,                   // 1 = facing right, -1 = facing left
+  genes: { ... },           // AQUA.GENETICS gene set
+  age: 0                    // Days alive (future: breeding threshold)
+}
+```
+
+### Cleaner Instance
+```js
+{
+  key:   'shrimp',          // AQUA.ITEMS key
+  alive: true,
+  mass:  0.5,               // grams
+  x: 200, y: 0,            // Canvas position
+  health: 100,              // Added in v9 for shrimp salt/excel damage
+  genes: { ... },
+  age: 0
+}
+```
+
+### Plant Instance (live)
+```js
+{
+  key:   'javafern',        // AQUA.ITEMS key
+  type:  'plant',           // 'plant' | 'fakeplant'
+  mass:  3,                 // grams — grows over time, affects nutrient uptake
+  alive: true,
+  x: 250, y: 0             // Canvas x position (y is computed from tank bottom)
+}
+```
+
+### Plant Instance (fake decor)
+```js
+{
+  type:  'fakeplant',
+  x: 110, y: 0,
+  color: '#ff44cc'          // Tint color for sprite
+}
+```
+
+### ChemSnapshot (chemHistory entry)
+```js
+{
+  day: 5,
+  ph: 7.1, nh3: 0.02, no2: 0.01, no3: 4.5,
+  o2: 7.8, co2: 3.2, po4: 0.1,
+  org: 0.1, bact: 0.12, algae: 0.3,
+  redox: 0.88                // Computed by AQUA.SIM.redoxScore(G)
+}
+```
+
+---
+
+## AQUA.ITEMS — Species & Equipment Data Table
+
+All items are pure JSON. No functions. The engine reads fields by convention.
+
+### Fish fields
+| Field | Type | Meaning |
+|-------|------|---------|
+| name | string | Display name |
+| type | 'fish' | Identifies as fish |
+| mass | number | Default mass (g) |
+| cost | number | Purchase price ($) |
+| o2c | number | O2 consumed per gram per tick (at 76°F) |
+| co2p | number | CO2 produced per gram per tick |
+| nh3p | number | NH3 produced per gram per tick (×1.8 when fed) |
+| wp | number | Organic waste per gram per tick (×1 fed, ×0.3 unfed) |
+| po4p | number | PO4 produced per gram per tick |
+| phmin/phmax | number | Tolerated pH range |
+| nh3l | number | NH3 lethal threshold (ppm) |
+| no2l | number | NO2 lethal threshold (ppm) |
+| no3l | number | NO3 chronic stress threshold (ppm) |
+| o2min | number | Minimum tolerated O2 (ppm) |
+| aggression | 0–1 | 0=peaceful, 1=very aggressive |
+| schooling | bool | Stressed when fewer than 3 of same species |
+| tempMin/Max | °F | Tolerated temperature range |
+| behaviors | string[] | Tags: 'livebearing','labyrinth','shrimp','snail','schooling',etc. |
+| spriteGroup | string | Which RENDER_ADAPTER draw fn to use |
+| desc | string | Store description |
+| attrs | string[] | Bullet points (prefix + or - colors them green/red) |
+
+### Cleaner fields
+Same as fish but with `type:'cleaner'` and:
+| Field | Meaning |
+|-------|---------|
+| oc | Organic waste consumed per gram per tick |
+| o2c | O2 consumed per gram per tick (added v9) |
+| co2p | CO2 produced per gram per tick (added v9) |
+
+### Plant fields
+| Field | Meaning |
+|-------|---------|
+| co2c | CO2 consumed per gram per tick at full efficiency |
+| o2p | O2 produced per gram per tick at full efficiency |
+| no3c | NO3 consumed per gram per tick |
+| po4c | PO4 consumed per gram per tick |
+| nh3c | NH3 consumed per gram per tick |
+| surfPerG | Biofilm surface area added per gram of plant mass |
+| lightNeeded | Minimum lightLevel (0–1) to photosynthesize |
+| growRate | Mass growth per gram per tick at full efficiency |
+
+### Equipment fields
+| Field | Meaning |
+|-------|---------|
+| onInstall | Array of `{stat, delta}` — applied once on purchase |
+| perTick | Array of `{stat, delta}` — applied to calcDeltas delta each tick |
+| flags | String array — queried by AQUA.FX.hasFlag(G, flag) |
+
+**Equipment flags in use:**
+- `hasFilter` — sponge filter present (bactMult ×1.6 in nitrification)
+- `hasHOB` — HOB filter present (same as hasFilter, stronger variant)
+- `hasLight` — LED light present (enables full photosynthesis)
+- `hasCO2` — CO2 injector present (adds CO2 each tick)
+- `hasUV` — UV sterilizer (reduces algae each tick)
+- `hasHeater` — heater present (sets tempStable flag)
+
+### Consumable fields
+| Field | Meaning |
+|-------|---------|
+| onUse | Array of action descriptors, processed by AQUA.FX.applyUse() |
+
+**onUse actions:**
+- `{action:'boostPlants', delta}` — adds delta mass to all live plants
+- `{action:'addChem', stat, delta}` — adds delta to G.chem[stat]; triggers shrimp safety warnings
+- `{action:'algaeDose', factor}` — multiplies algae by factor; stresses shrimp
+- `{action:'reduceStat', stat, factor}` — multiplies G.chem[stat] by factor; kills shrimp if aquarium salt
+- `{action:'boostFishHealth', delta}` — adds delta health to all alive fish
+
+---
+
+## AQUA.FX — Effect Resolver
+
+```js
+AQUA.FX.applyInstall(descriptors, G)  // Called on item purchase for equip/substrate
+AQUA.FX.applyPerTick(descriptors, delta) // Called inside calcDeltas for each equipped item
+AQUA.FX.applyUse(descriptors, G)      // Called when consumable is used
+AQUA.FX.hasFlag(G, flag)              // Returns true if any equipped item has that flag
+```
+
+---
+
+## AQUA.SIM — Pure Simulation Engine
+
+**Contract:** `tick(G, fed)` returns `{newState, events[], delta}`. Never mutates G directly. No DOM access.
+
+### calcDeltas(chem, fed, G) → delta object
+
+Computes per-tick rates. Returns:
+```js
+{
+  o2, co2, nh3, no2, no3, po4, org, bact, algae, anoxic,
+  totalSurf  // passed through for debug panel
+}
+```
+
+**Computation order inside calcDeltas:**
+1. Fish respiration & waste (Q10 temperature scaling: `Math.pow(2,(temp-76)/10)`)
+2. Nitrification: Michaelis-Menten NH3→NO2 (Nitrosomonas), NO2→NO3 (Nitrobacter)
+3. Bacteria colony growth/death:
+   - Growth: `0.004 × wasteFuel × o2Factor × surfCap`
+   - Death: `0.015 × (1 - o2/2)` when o2 < 2
+4. Bacteria O2 consumption: `bact × 0.08`
+5. Anaerobic flag: if o2 < 1.5 AND org > 0.3 → `d.anoxic = 1`
+6. Decomposition: org × 0.15 + cleaner oc values; cleaners consume O2 + produce CO2
+7. Plant photosynthesis: `eff = lightLevel × min(1, co2/5) × min(1, no3/15)` — Liebig minimum
+8. Equipment perTick (bubbler, HOB, UV, CO2 injector)
+9. Algae growth: `0.09 × min(1,no3/25) × min(1,po4/1.2) × lightFactor`
+10. Surface gas exchange: `(9 - o2) × 0.05`
+
+### redoxScore(G) → 0–1
+```
+(o2/9)×0.6 + (1 - min(1, org/2))×0.3 + (1 - min(1, nh3/0.5))×0.1
+```
+
+### tick(G, fed) — events emitted
+| Event type | Trigger |
+|------------|---------|
+| `chem_warn` | nh3>0.2, no2>0.3, po4>0.7, o2<4 — includes `reason` string |
+| `chem_info` | no3>20 |
+| `algae_bloom` | algae > 1.8 |
+| `algae_stress` | algae > 4 (stresses fish) |
+| `bact_warn` | bact < 0.08 after day 3 |
+| `anoxic_event` | anoxicDays >= 2 (severe if >= 4) |
+| `fish_died` | fish.health reaches 0 |
+| `phase_change` | day>=30 → 'grow_plant'; javafern.mass>=4.5 → 'sell_plant' |
+| `game_over` | all fish dead (won:false) or plant sold at sell_plant phase (won:true) |
+
+### Fish health calculation (per tick)
+```
+stressIndex = 0
+  + if nh3 > nh3l×0.6:  (nh3/nh3l) × 20
+  + if no2 > no2l×0.6:  (no2/no2l) × 15
+  + if o2  < o2min×1.2: ((o2min-o2)/o2min) × 30
+  + if pH out of range:  +10
+  + if schooling & < 3 of same species: (3 - count) × 4
+
+stress = clamp(stress + stressIndex - 5, 0, 100)
+health -= stress × 0.02
+```
+
+---
+
+## AQUA.GENETICS
+
+```js
+AQUA.GENETICS.randomGenes(itemKey)  // Returns gene set for new animal
+AQUA.GENETICS.inherit(geneA, geneB) // Blends two parents, 8% mutation chance
+AQUA.GENETICS.describe(genes)       // Returns human-readable string for Fish tab
+```
+
+**Gene fields on every fish/cleaner instance:**
+| Field | Range | Meaning |
+|-------|-------|---------|
+| colorGene | 0–360 | HSL hue offset from species default |
+| satGene | 0–1 | Color saturation (1=vivid, 0=washed) |
+| patternGene | string | 'solid'\|'spotted'\|'striped'\|'metallic' |
+| sizeGene | 0.7–1.4 | Mass multiplier at birth |
+| diseaseResist | 0–1 | Future disease system resistance probability |
+
+*Note: colorGene is currently used only in `hslFromGene()` inside RENDER_ADAPTER for placeholder rect tinting. Graphics overhaul will apply it to real sprites.*
+
+---
+
+## AQUA.BUS — Event Bus
+
+```js
+AQUA.BUS.on(event, fn)    // Subscribe
+AQUA.BUS.off(event, fn)   // Unsubscribe
+AQUA.BUS.emit(event, data) // Fire
+```
+
+**All events in the system:**
+| Event | Data | Who emits | Who handles |
+|-------|------|-----------|-------------|
+| `status_changed` | (none) | actions, shop, sim results | ui.renderStatus() |
+| `log` | `{msg, type}` | everywhere | ui._log() |
+| `fish_died` | `{fishKey, name}` | SIM.tick | ui._log |
+| `algae_stress` | (none) | SIM.tick | ui._log |
+| `algae_bloom` | (none) | SIM.tick | ui._log |
+| `chem_warn` | `{param, value, severe, reason}` | SIM.tick | ui._log |
+| `chem_info` | `{param, msg}` | SIM.tick | ui._log |
+| `bact_warn` | `{bact}` | SIM.tick | ui._log |
+| `anoxic_event` | `{days, severe}` | SIM.tick | ui._log |
+| `phase_change` | `{phase}` | SIM.tick | ui._log |
+| `game_over` | `{won}` | SIM.tick | ui._log |
+
+---
+
+## AQUA.RENDER_ADAPTER
+
+```js
+AQUA.RENDER_ADAPTER.register(key, drawFn)  // Register species draw function
+AQUA.RENDER_ADAPTER.drawEntity(X, entity, x, y, tick, cache, SCALE)
+```
+
+**drawFn signature:** `(X, entity, x, y, tick, spriteCache, SCALE) → void`
+
+**Registered species:**
+- `goldfish` — 4-frame pixel art animation
+- `guppy` — 2-frame animation (also used as fallback sprite for many species)
+- `betta`, `neon_tetra`, `corydoras`, `angelfish`, `molly`, `platy`, `otocinclus`, `rainbowfish` — all call `placeholderDraw` currently
+- `shrimp` — uses shrimp sprite
+- `amano_shrimp`, `ghost_shrimp` — placeholderDraw
+- `snail` — uses snail sprite
+- `mystery_snail` — placeholderDraw
+
+**placeholderDraw:** Draws a colored rectangle tinted from `entity.genes.colorGene` with a health bar above.
+
+---
+
+## AQUA.ui — DOM Bridge
+
+```js
+AQUA.ui._init()             // Subscribe all BUS listeners (called once at game start)
+AQUA.ui._log(msg, type)     // Append to #elog. type: 'ok'|'warn'|'danger'|'info'
+AQUA.ui.toggleDebug()       // Show/hide debug panel
+AQUA.ui.renderStatus()      // Full status panel redraw (calls renderStatusStrip)
+AQUA.ui.renderStatusStrip() // Redraw #status-strip pills
+AQUA.ui.buildChemTable()    // Build #ctab interaction matrix (called once)
+```
+
+**Status strip pills (left to right):**
+1. FED TODAY / NOT FED
+2. FISH health summary
+3. BACTERIA colony %
+4. PLANTS (complex: no plants / no light / low NO3 / low CO2 / growing)
+5. O2 / ANOXIC status
+6. N-CYCLE (NH3 / NO2 summary)
+
+---
+
+## AQUA.actions
+
+```js
+AQUA.actions.feed()         // Set G.fed=true, add org waste. Warns if double-fed.
+AQUA.actions.waterChange()  // Cost $5. Reduces nh3/no2/no3/org/po4 by 30%. Boosts O2. Reduces anoxicDays.
+AQUA.actions.skipDay()      // Calls advanceDay()
+AQUA.actions.advanceDay()   // +$3 income, calls SIM.tick(), applies events, saves
+AQUA.actions.sellPlant(plantObj)  // Removes plant, pays mass×$2, triggers game_over if in sell_plant phase
+```
+
+---
+
+## AQUA.shop
+
+```js
+AQUA.shop.open()            // Show store div, call build()
+AQUA.shop.close()           // Hide store, call advanceDay() (closing costs a day)
+AQUA.shop.build()           // Refresh store display and sell section
+AQUA.shop.showCat(cat)      // Switch category: 'fish'|'cleaner'|'plant'|'equip'|'other'
+```
+
+**Category mapping (`_catFor`):**
+- `fish` → fish tab
+- `cleaner` → cleaner tab
+- `plant` → plant tab
+- `equip` → equipment tab
+- `consumable`, `substrate`, `decor` → other tab
+
+**Purchase flow:**
+1. Deduct cost from G.money
+2. If equip: push key to G.equip, call FX.applyInstall
+3. If fish: push makeFish() to G.fish
+4. If cleaner: push makeCleaner() to G.cleaners
+5. If plant: push plant object to G.plants (type:'plant', key, mass from ITEMS, x random)
+6. If consumable: call FX.applyUse(item.onUse, G)
+7. emit status_changed
+
+---
+
+## AQUA.renderer (IIFE)
+
+```js
+AQUA.renderer.init(canvas)  // Set up canvas context, build all sprites
+AQUA.renderer.start()       // Start requestAnimationFrame loop
+```
+
+**Sprite cache keys:**
+`goldfish_0`, `goldfish_1`, `goldfish_2`, `goldfish_3`, `goldfish_0_flip`, etc.  
+`guppy_0`, `guppy_1`, `guppy_0_flip`, `guppy_1_flip`  
+`shrimp`, `snail`  
+`javafern_stem`, `javafern_frond`  
+`fakeplant`  
+`filter`, `bubbler`, `light_bar`  
+`gravel_0` through `gravel_3`
+
+**Frame loop order:**
+1. clearRect
+2. drawWater(GH) — applies anoxic brown tint if anoxicDays > 0
+3. drawLight(GH) — if hasLight flag
+4. drawSurface()
+5. drawOrganic(org, GH)
+6. drawAlgae(GH)
+7. drawGravel(GH)
+8. drawEquip(GH)
+9. drawBubbles()
+10. drawPlants(GH)
+11. Cleaners (via RENDER_ADAPTER)
+12. Fish (via RENDER_ADAPTER + moveFish)
+13. Border vignette
+14. drawHUD()
+15. tick++
+
+---
+
+## AQUA.edu
+
+```js
+AQUA.edu.show(key)   // key: 'nitrogen' | 'oxygen' | 'problems'
+AQUA.edu.close()
+```
+
+**Content keys:** `nitrogen` (4 sections), `oxygen` (4 sections), `problems` (5 sections)
+
+---
+
+## CONSTANTS
+
+```js
+AQUA.SAVE_VERSION = 5         // Bump when G shape changes incompatibly
+AQUA.WATER_CHANGE_COST = 5    // $5 per water change
+AQUA.DAILY_INCOME = 3         // $3 per day
+AQUA.CHEM_HISTORY.MAX_DAYS = 60
+```
+
+---
+
+## KNOWN ISSUES / GAPS (as of v9)
+
+1. **`cleaners[].health` not initialized in `makeCleaner()`** — v9 FX.applyUse writes it but it starts undefined. Fix: add `health:100` to makeCleaner.
+2. **Bacteria bact > 1 not possible** — clamped in tick but growthRate could theoretically push above 1. Currently fine.
+3. **pH model oversimplified** — no KH/GH buffering. pH computed purely from CO2 via `8.3 - log10(co2×0.5)×0.8`. Carbonate hardness (KH) not yet modeled.
+4. **Temperature is static** — G.chem.temp is always 76°F; heater only sets tempStable flag. No actual temp dynamics yet.
+5. **Day/night cycle absent** — photosynthesis runs all day; plants don't consume O2 at night. This is a known gap.
+6. **Algae delta warn event fires every tick** if algae>1.8 — should throttle or gate to once per N days.
+7. **Dead fish stay in G.fish array** — never cleaned out. They still occupy `alive:false` slots forever. Need a cleanup or graveyard.
+8. **Schooling stress uses same-key count** — doesn't account for interspecies schooling (e.g., Corydoras may school with other Corydoras variants).
+
+---
+
+## DEPENDENCY GRAPH (read order for porting)
+
+```
+BUS → (no deps)
+ITEMS → (no deps)
+GENETICS → (no deps)
+FX → ITEMS, BUS
+CHEM_HISTORY → SIM.redoxScore
+SIM → ITEMS, FX, CHEM_HISTORY, GENETICS(indirect)
+G / initState / makeFish / makeCleaner → ITEMS, GENETICS
+save/load → G
+actions → G, SIM, BUS, shop(partial)
+RENDER_ADAPTER → ITEMS, GENETICS
+panels → G, SIM, GENETICS, CHEM_HISTORY
+ui → G, SIM, FX, RENDER_ADAPTER, panels, BUS
+shop → G, ITEMS, FX, GENETICS, BUS, actions(partial)
+renderer → G, AQUA.FX, RENDER_ADAPTER (canvas only)
+edu → (no deps — pure content)
+intro → G, ui, shop, renderer, BUS
+```
+
+---
+
+## SAVE FORMAT
+
+Key: `localStorage['aquaSimSave']`  
+Format: `JSON.stringify(AQUA.G)`  
+Version guard: if `parsed.version < AQUA.SAVE_VERSION`, discard and start fresh.  
+Current version: **5**

@@ -1,0 +1,227 @@
+# AQUA SIM — TODO & ROADMAP
+**Version:** v9  
+**Last updated:** Session 3  
+**Upload alongside AQUASIM_CONTEXT.md at the start of each session.**
+
+---
+
+## COMPLETED ✅
+
+- [x] Core architecture: AQUA.BUS, AQUA.ITEMS, AQUA.FX, AQUA.SIM (pure engine)
+- [x] Save/load with schema version guard (localStorage)
+- [x] AQUA.GENETICS — color/trait genes on every fish/cleaner (mechanics live, graphics pending)
+- [x] 10 fish species: goldfish, guppy, betta, neon tetra, corydoras, angelfish, molly, platy, otocinclus, rainbowfish
+- [x] 5 plants: java fern, amazon sword, anubias, hornwort, duckweed
+- [x] 5 cleaners: cherry shrimp, amano shrimp, ghost shrimp, nerite snail, mystery snail
+- [x] Equipment: bubbler, sponge filter, HOB filter, LED light, CO2 injector, UV sterilizer, heater
+- [x] Consumables: root tabs, liquid fertilizer (NPK), KNO3 powder, liquid carbon (Excel), CO2 tabs, aquarium salt, dechlorinator
+- [x] Substrate: aquasoil
+- [x] Categorized store (Fish / Cleaners / Plants / Equipment / Other)
+- [x] Chemistry chart panel (60-day sparklines, click-to-highlight)
+- [x] Fish profiles tab (health/stress bars, gene readout)
+- [x] Interactions table (entity × parameter matrix)
+- [x] Status indicator strip (6 pills: fed/fish/bacteria/plants/O2/N-cycle)
+- [x] Educational popups: Nitrogen Cycle, Oxygen Cycle, What Goes Wrong
+- [x] Bacteria colony dynamics (grows from waste, dies without O2, surface-area capped)
+- [x] Anaerobic events (H2S/methane damage at sustained low O2, water tint visual)
+- [x] Context-aware log warnings (explain WHY, not just what)
+- [x] Shrimp safety system (salt kills shrimp, Excel stresses shrimp, NO3 overdose warning)
+- [x] Cleaners consume O2 (previously ignored)
+- [x] Water change boosts O2 toward saturation
+- [x] Nutrient dosing (liquid fert, KNO3, CO2 tabs, liquid carbon)
+- [x] Redox score + forecast row
+- [x] AQUA.RENDER_ADAPTER — sprite registry decoupled from renderer
+
+---
+
+## TIER 1 — Core gameplay/educational loop (do next)
+
+### [ ] T1-A: Fix `makeCleaner` health initialization
+**Why:** v9 FX.applyUse writes `cl.health` but it starts as `undefined`.  
+**Where:** `AQUA.makeCleaner()` — add `health: 100` to the returned object.  
+**Impact:** Prevents NaN in shrimp damage calculations. 1-line fix.
+
+### [ ] T1-B: Day/night cycle
+**Why:** The most important missing educational concept — plants consume O2 at night, causing real morning O2 crashes. Teaches why planted tanks need surface agitation even with plants.  
+**Mechanic:**
+- Add `G.timeOfDay: 'day'` (alternates every 12 sim-hours, or every tick with a 0.5 day/night flag)
+- Simplest: track `G.dayHalf` (0=day, 1=night). Toggle each `advanceDay()` call — or represent sub-day.
+- During 'night': plant photosynthesis = 0, plants consume O2 at `o2p × 0.4` rate instead
+- Add status pill: `☀ DAY` / `🌙 NIGHT` showing current phase
+- Add log entry when switching: "Night falls — plants now consuming O2"
+- Add to educational popup (Oxygen Cycle section)
+**Where:** `calcDeltas()` plant section, `advanceDay()`, status strip.
+
+### [ ] T1-C: Tank cycling phase UI
+**Why:** New Tank Syndrome is the #1 cause of beginner fish death and the core educational moment of the nitrogen cycle. The bacteria colony dynamics exist in the sim but there's no UI guidance.  
+**Mechanic:**
+- Define "cycling" as: `G.day < 21 && G.chem.bact < 0.4`
+- Show a cycling progress bar in Tab 0 (Tank Status): `CYCLING PROGRESS [===----] 38%`
+- Progress = bacteria % relative to 40% threshold
+- Milestones at bact 0.1, 0.2, 0.3, 0.4 with log messages: "Nitrosomonas colonizing!", "First NH3 spike expected to peak soon"
+- Badge on status strip during cycling: `⚠ NEW TANK CYCLING`
+**Where:** `renderStatus()`, Tab 0 HTML panel.
+
+### [ ] T1-D: Fish compatibility checker at purchase
+**Why:** Beginner mistake is mixing incompatible species (betta + guppy, cold water + tropical, schooling alone). Teaches species research habits.  
+**Mechanic:**
+- Before purchase, check new fish against all existing fish:
+  - Aggression conflict: if buying aggression>0.5 fish when others present with schooling behavior
+  - Temperature overlap: if tempMin/Max ranges don't overlap with existing fish
+  - Betta special rule: only 1 betta allowed; second betta purchase shows warning
+  - Schooling alone: if buying 1 schooling fish with no others of same species, warn
+- Show inline warning in store card: "⚠ May attack guppies" or "⚠ This fish needs 3+ of its kind"
+- Still allow purchase (player choice) but flag clearly
+**Where:** `AQUA.shop._buys()` — add compatibility check per item card.
+
+### [ ] T1-E: Throttle repeated event spam
+**Why:** `algae_bloom` and some `chem_warn` events fire every tick causing log flood.  
+**Mechanic:** Add `G.lastEventDay = {}` map. Gate: `if (G.day - (G.lastEventDay[type]||0) < 3) return;`  
+**Where:** `SIM.tick()` before pushing events. 3-day cooldown per event type.
+
+---
+
+## TIER 2 — Depth & progression
+
+### [ ] T2-A: KH/GH carbonate hardness
+**Why:** pH buffering is completely absent. Real tanks are stabilized by carbonate hardness (KH). Without it, pH swings wildly with CO2 changes. Teaches buffering chemistry.  
+**Mechanic:**
+- Add `G.chem.kh: 4` (°dKH, default moderately soft)
+- pH stabilization: `tpH = targetPH; pH += (tpH - pH) × (0.02 + kh × 0.015)` — higher KH = slower pH change
+- New store items: Crushed Coral ($6, onInstall increases kh), Peat Moss ($5, lowers kh and target pH)
+- Status pill: `KH: 4°` with warning if < 2 (unstable) or > 12 (too hard for acidic species)
+- Educational popup update: add pH Buffering section to "What Goes Wrong"
+**Where:** `G.chem`, `initState`, `SIM.tick pH calc`, store ITEMS, status strip.
+
+### [ ] T2-B: Disease system (basic)
+**Why:** Teaches quarantine, water quality prevention, stress-disease link.  
+**Mechanic:**
+- Add `G.diseases: []` array of active disease instances
+- Disease: Ich (`ich`) — triggered probabilistically when fish stress > 60 for 3+ days
+  - Mechanic: spreads to other fish each tick at 20% chance per fish
+  - Damage: +5 health damage/day to infected fish
+  - Cure: raise temp to 86°F for 3 days (if heater installed) + Ich Treatment item ($10)
+- Disease: Fin Rot (`fin_rot`) — triggered by high NH3 + high stress
+  - Damage: +2 health/day
+  - Cure: water change + Fin Rot Treatment ($8)
+- Visual: red dot indicator on fish card in FISH tab
+- Log: "⚠ [Fish name] showing ich spots! Treat immediately."
+- Store: add treatment consumables
+**Where:** New `AQUA.DISEASE` module; SIM.tick adds disease tick; fish instance gets `diseases:[]`.
+
+### [ ] T2-C: Tank size upgrade
+**Why:** Tank volume is the core dilution mechanic — bigger tank = more forgiving chemistry. Teaches why "more water = more stability."  
+**Mechanic:**
+- Add `G.tankGallons: 10` (starting value)
+- Available sizes: 5, 10, 20, 55, 125 gal
+- Dilution factor: chemistry changes are divided by `tankGallons/10` — bigger tank, slower swings
+- Bioload limit: soft cap on fish count based on gallons (1 inch of fish per gallon rule)
+- Store item: Tank Upgrade ($30 for 20g, $60 for 55g, $120 for 125g)
+- Status pill: `10 GAL` showing current tank size
+**Where:** `G.tankGallons`, `calcDeltas()` (scale all deltas by 10/tankGallons), store ITEMS.
+
+### [ ] T2-D: Dead fish cleanup
+**Why:** Dead fish accumulate in G.fish forever, polluting the fish tab.  
+**Mechanic:**
+- After 3 days dead, convert to `{type:'decomposing', daysDeadded, org_release}` and add organic waste
+- Add `AQUA.actions.removeDead()` button in fish tab that appears when dead fish present
+- Or: auto-remove after 3 days and add `G.chem.org += 0.3 × fish.mass/5`  
+**Where:** `SIM.tick()` post-processing, fish profiles tab.
+
+### [ ] T2-E: Temperature dynamics
+**Why:** Temp is currently static at 76°F. Heater does nothing mechanically.  
+**Mechanic:**
+- Add ambient temp: G.ambientTemp (default 68°F, fluctuates ±2°F per day via sin wave)
+- Without heater: `G.chem.temp` trends toward ambientTemp ± random
+- With heater: `G.chem.temp` locked at 76°F
+- O2 solubility curve: `o2Max = 14.6 - 0.41×temp + 0.0079×temp²` (simplified)
+- Heatwave random event (Tier 3): ambientTemp spikes to 90°F for 3 days
+**Where:** `SIM.tick()`, `initState`, `AQUA.ITEMS.heater`.
+
+---
+
+## TIER 3 — Engagement & retention
+
+### [ ] T3-A: Achievements
+Examples: "First Cycle" (bact > 0.4 for first time), "Algae Slayer" (algae > 5 then back to 0), "Century" (100 days), "Plant Baron" (sell 5 plants), "Shrimp Lord" (10 alive shrimp)  
+**Where:** New `AQUA.ACHIEVEMENTS` module. Store in `G.achievements = {}`.
+
+### [ ] T3-B: Random events
+- Power outage: O2 input stops for 2 days (filter/bubbler off). Dramatic O2 crash.
+- Heatwave: temp spikes, O2 solubility drops, fish stress
+- Hitchhiker snail: mystery snail appears in plants purchase (harmless)
+- Equipment failure: filter stops working for 1 day without warning
+- Algae spike: sudden NO3 + light event causes bloom
+**Where:** `SIM.tick()` — check random event pool each day. Add `G.activeEvents: []`.
+
+### [ ] T3-C: Breeding system
+**Prereqs:** Genetics scaffold exists. Need age tracking and pair detection.  
+**Mechanic:**
+- Guppies/Mollies/Platies (livebearers): if male + female alive, healthy (health>70), tank stable — 10% chance per day of producing 1–3 fry
+- Fry: small fish instance (mass × 0.15 sizeGene), inherits blended genes from parents via `GENETICS.inherit()`
+- Fry grows over 14 days to adult mass
+- Cherry shrimp: if 2+ alive and stable — occasional shrimplet (mass 0.1)
+- Store sells M/F pairs for livebearers
+**Where:** New `AQUA.BREEDING` module called from `SIM.tick()`.
+
+### [ ] T3-D: Quarantine tank
+Second tank object with same SIM pipeline. Used to isolate sick fish before adding to main tank. Educational: teaches quarantine protocol.  
+**Where:** `G.qTank = null | {chem, fish, equip}`. `AQUA.SIM.tick()` already pure — just call it twice.
+
+### [ ] T3-E: Color rendering from genetics
+Apply `entity.genes.colorGene` and `satGene` to actual sprite tinting via canvas `globalCompositeOperation` or offscreen canvas hue-rotate filter.  
+**Where:** `AQUA.RENDER_ADAPTER` — update each registered draw function to apply gene-based tinting.
+
+### [ ] T3-F: PWA / mobile support
+Add `manifest.json`, service worker for offline play, touch-friendly button sizing.
+
+---
+
+## REFACTOR TASKS (infrastructure)
+
+### [ ] R1: Split into separate JS files
+**Priority:** Do when file exceeds ~2500 lines or when starting a new feature that needs its own module.  
+**Order:** Extract in dependency order (BUS first, then ITEMS, FX, GENETICS, SIM, state, actions, panels, ui, shop, renderer, edu, intro).  
+**Shell HTML:** Keep only CSS + HTML structure + `<script src="js/...">` tags.
+
+### [ ] R2: Convert ITEMS to JSON file
+`items.json` — loaded via fetch on startup. Enables non-programmer content editing and future Unreal DataTable export.
+
+### [ ] R3: TypeScript migration
+Strongly type G, ChemSnapshot, FishInstance, etc. Enables better IDE support and catches field-name bugs.  
+**Unreal port note:** TypeScript interfaces map 1:1 to Unreal USTRUCT definitions.
+
+### [ ] R4: Unit tests for SIM engine
+`sim.test.js` — pure functions are trivially testable. Test: does a heavily fed tank spike NH3? Does adding a filter grow bacteria? Does anoxic condition trigger event?
+
+---
+
+## GRAPHICS OVERHAUL PLAN (separate phase)
+
+The current renderer is placeholder pixel art. Graphics overhaul options:
+
+**Option A: Stay HTML/Canvas**
+- Replace 16×16 pixel art with larger sprite sheets (64×64 or SVG)
+- Per-species draw functions in RENDER_ADAPTER
+- Apply genetics color tinting via canvas filter
+
+**Option B: Port to Phaser 3**
+- Phaser handles sprite sheets, animations, camera, tilemaps
+- AQUA.SIM (pure engine) ports unchanged — just replace renderer
+- AQUA.BUS event system maps to Phaser events
+
+**Option C: Unreal Engine (long-term)**
+- AQUA.SIM logic → Blueprint/C++ (already structured for this)
+- AQUA.G state → Unreal GameInstance
+- ITEMS → DataTable
+- RENDER_ADAPTER → Mesh/Material registry
+
+---
+
+## NEXT SESSION — RECOMMENDED STARTING POINT
+
+1. Fix T1-A (makeCleaner health) — 1 line
+2. Implement T1-B (day/night cycle) — ~50 lines, high educational value
+3. Implement T1-C (cycling phase UI) — ~40 lines, ties into existing bact system
+4. Implement T1-E (event throttling) — ~10 lines, fixes log spam
+5. Start T2-A (KH/GH) if time permits

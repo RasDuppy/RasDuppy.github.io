@@ -1,0 +1,3570 @@
+<!--
+================================================================================
+  AQUASIM — THE LIVING TANK  |  Single-shell HTML file
+================================================================================
+
+  WHAT THIS FILE IS:
+  A self-contained browser game — one HTML file with embedded CSS and JS.
+  The JS is divided into named sections separated by §MARKER comments.
+  To locate any section instantly, search for its marker (e.g. search "§SIM").
+
+  HOW TO NAVIGATE:
+  • Search "§MARKER" to jump to any section (markers are unique in this file)
+  • The table of contents below has approximate line numbers (update after edits)
+  • Within each section, subsections use "// ──" comment lines
+
+  GOLDEN RULE:
+  §SIM (AQUA.SIM) is a PURE FUNCTION ENGINE — tick(G,fed) takes state and
+  returns new state + events. No DOM, no side effects. This is the port target.
+  §RENDERER is the ONLY section deleted when porting to Unreal/Unity.
+  Everything else either stays or gets a thin wrapper.
+
+  HOW TO ADD A NEW FISH SPECIES:
+  1. Add one entry to AQUA.ITEMS in §DATA  — copy an existing fish object
+  2. Register a draw fn in AQUA.RENDER_ADAPTER in §RENDERER (or use placeholder)
+  Done. The sim, store, compat checker, and fish profiles pick it up automatically.
+
+  HOW TO ADD A RANDOM EVENT:
+  Add one entry to AQUA.EVENTS.CATALOG in §EVENTS.
+  Fields: id, name, icon, weight, minDay, condition(G), apply(G)->{msg,detail,cost,type}
+
+  GAME STATE (G):
+  AQUA.G is the single source of truth — always plain JSON-serialisable.
+  Key fields: day, timeOfDay, chem{ph,nh3,no2,no3,o2,co2,temp,org,bact,po4,kh,gh},
+  fish[], cleaners[], plants[], equip[], lightSchedule{lightOff,co2Off},
+  diurnalLog[], chemHistory[], achievements[], tankRating, activeTreatments[]
+
+  PORT NOTES:
+  Lines marked "// PORT NOTE:" explain how each piece maps to Unreal/Unity.
+  They are documentation only — safe to ignore in the browser build.
+
+================================================================================
+  TABLE OF CONTENTS  (search the §MARKER to jump directly)
+================================================================================
+
+  §STYLES          ~line 1      index.html (CSS)              Monospace dark theme, layout, tab system
+  §HTML            ~line 70     index.html (HTML)             App shell, panels, store, overlays
+  §BUS               ~line 424     00_bus.js               AQUA.BUS — Central event bus
+  §DATA              ~line 463     01_data.js              AQUA.ITEMS — Pure species/equipment data table (zero functions)
+  §FX                ~line 771     02_fx.js                AQUA.FX, AQUA.GENETICS, AQUA.CHEM_HISTORY
+  §SIM               ~line 917     03_sim.js               AQUA.SIM — Pure simulation engine (tick, nightTicks, calcDeltas)
+  §STATE             ~line 1330    04_state.js             AQUA.G state, initState, makeFish, save/load, AQUA.actions
+  §COMPAT            ~line 1494    05_compat.js            AQUA.COMPAT — Fish compatibility checker (pure)
+  §EVENTS            ~line 1603    06_events.js            AQUA.EVENTS — Random event engine and catalog
+  §ACH               ~line 1845    07_achievements.js      AQUA.ACHIEVEMENTS — Achievement tracking and tank rating
+  §PANELS            ~line 1970    08_panels.js            AQUA.panels — Tab UI, chemistry charts, Pourbaix, diurnal, fish profiles
+  §NIGHT             ~line 2353    09_night.js             AQUA.NIGHT — Night transition UI, drawRating, drawDiurnal
+  §RENDERER          ~line 2828    10_renderer.js          AQUA.renderer — Pixel art canvas renderer (PORT TARGET: delete on Unreal/Unity)
+  §UI                ~line 3049    11_ui.js                AQUA.ui — DOM handlers, renderStatus, renderDeltaBreakdown
+  §SHOP              ~line 3337    12_shop.js              AQUA.shop — Store UI: buy/sell panels, category tabs
+  §INTRO             ~line 3435    13_intro.js             AQUA.intro — Intro screen builder and game bootstrap
+
+================================================================================
+// ============================================================
+// MASTER TODO LIST — AquaSim  (mechanics-first; graphics/port deferred)
+// Legend: [x]=done  [.]=in-progress  [ ]=todo
+// Phases: NOW=active  NEXT=milestone2  LATER=milestone3+  PORT=graphics overhaul
+// ============================================================
+//
+// ── COMPLETED (v8 baseline) ─────────────────────────────────
+// [x] Architecture: BUS, SIM.tick() pure fn, FX, RENDER_ADAPTER
+// [x] Centralized ITEMS data table (pure JSON, zero functions)
+// [x] Save/load with schema version guard
+// [x] GENETICS: color/trait/size/diseaseResist genes on every entity
+// [x] 10 fish species + 3 shrimp/snail + 5 plant species
+// [x] Equipment tiers: sponge filter, HOB, CO2 injector, UV, heater, light
+// [x] 60-day chemistry history + sparkline chart (click-to-highlight)
+// [x] Tabbed UI: Tank Status / Chemistry Charts / Interactions / Fish Profiles
+// [x] Categorized store: Fish / Cleaners / Plants / Equipment / Other
+// [x] Nitrogen cycle: NH3→NO2→NO3, Q10 temp scaling, Liebig minimum algae
+// [x] Redox score, schooling stress, pH derived from CO2
+//
+// ── SECTION 1 · WATER CHEMISTRY EXPANSION (NOW) ─────────────
+// [.] KH (carbonate hardness) added to chem state
+//     [x] KH consumed by CO2 each tick, dKH = -co2*0.003
+//     [x] KH replenished by crushed coral item (store)
+//     [x] Acid crash event when KH reaches 0 and pH collapses
+//     [x] KH shown in chem-grid and chemistry chart
+//     [ ] Driftwood decor lowers KH slightly over time
+// [.] GH (general hardness: Ca²⁺ + Mg²⁺) added to chem state
+//     [x] GH shown in chem-grid
+//     [x] Per-species GH min/max tolerance in ITEMS
+//     [x] GH stress applied in SIM health checks
+//     [ ] Remineralizer consumable raises GH
+//     [ ] Driftwood lowers GH slightly over time
+// [.] Pourbaix (Eh-pH) diagram — Chemistry tab panel
+//     [x] Eh (redox potential mV) derived from O2, NH3 each tick
+//     [x] Canvas-drawn Eh vs pH plot, tank dot moves in realtime
+//     [x] Stability zone overlays (safe / Fe-oxidized / reductive / toxic)
+//     [x] Tank dot flashes red outside safe zone
+//     [ ] Click zone to log plain-language explanation
+// [.] CO2 / KH / pH triangle lookup widget — Chemistry tab
+//     [x] Canvas grid: rows=KH, cols=CO2, cell=resulting pH
+//     [x] Current tank values highlighted on grid
+//     [ ] Export or print view
+// [ ] Langelier Saturation Index (LSI) bar in Tank Status
+//     [ ] LSI = pH - pHs (from KH, temp, Ca)
+//     [ ] Negative=corrosive, positive=scaling indicator
+//     [ ] Equipment degradation over time when LSI ignored
+//
+// ── SECTION 2 · DISEASE SYSTEM (NOW) ────────────────────────
+// [.] Disease data table in ITEMS (pure JSON)
+//     [x] Ich: temp-sensitive spread, white-dot visual flag
+//     [x] Fin Rot: NH3/NO2 triggered, slow health drain
+//     [x] Velvet: O2/stress triggered, high mortality
+//     [ ] Columnaris: warm water + stress, fast spread
+// [.] Disease state on each fish: {disease, daysSick, severity}
+//     [x] SIM.tick() rolls infection chance from water params + diseaseResist gene
+//     [x] Spread: sick fish raise infection roll for others
+//     [x] fish_died event includes cause:'disease'
+//     [ ] Visual stress flash for diseased fish on canvas (render flag)
+// [.] Treatment items in store (Other tab)
+//     [x] Ich treatment: raises temp, clears ich, stresses sensitive fish
+//     [x] Methylene Blue: kills Fin Rot, harms bacterial colony
+//     [x] Copper Sulfate: kills Velvet + shrimp (player warned)
+//     [ ] Quarantine net item (prereq for quarantine tank)
+// [.] Disease panel in Fish Profiles tab
+//     [x] Each fish card shows disease status + severity bar
+//     [x] Diagnosis log messages
+//     [ ] Treatment recommendation with cost shown inline
+//
+// ── SECTION 3 · BREEDING SYSTEM (NEXT) ──────────────────────
+// [ ] Pair detection: gender field on fish instance
+// [ ] Fry spawning with GENETICS.inherit() genes
+// [ ] Sell/trade fry — price driven by gene rarity
+// [ ] Cherry shrimp colony counter + color deepening over generations
+//
+// ── SECTION 4 · TANK SIZE & ECOSYSTEM SCALING (NEXT) ────────
+// [ ] G.tankGal field; upgrade tiers 5→10→20→40→55→125 gal
+// [ ] Dilution factor in SIM.calcDeltas() scales all deltas / tankVol
+// [ ] Hardscape items: dragon stone (+KH/GH), driftwood (-KH, tannins)
+// [ ] Substrate expansion: sand, gravel, aquasoil, bare-bottom
+//
+// ── SECTION 5 · RANDOM EVENTS & CRISES (NEXT) ───────────────
+// [x] Event engine: daily weighted roll, suppressed first 5 days
+// [x] Power outage: filter off, O2 drops, bact die-off
+// [x] Heatwave: +4-8°F for 3 days
+// [x] Equipment failure: repair cost required
+// [x] Hitchhiker snail on plant purchase (good/bad)
+// [x] Snail invasion: bladder snails multiply if untreated
+// [x] Mystery fish: rare species in store for 1 day
+// [x] Event modal: in-flow card above event log
+//
+// ── SECTION 6 · DAY/NIGHT CYCLE (NEXT) ──────────────────────
+// [ ] Sub-tick phases: morning / afternoon / night
+// [ ] lightLevel 1.0 / 0.4 / 0.0 by phase
+// [ ] Night O2 crash: dense plant tanks lose O2 at night
+// [ ] Fish activity patterns: nocturnal flag in ITEMS
+//
+// ── SECTION 7 · FISH COMPATIBILITY & BEHAVIOR (NEXT) ────────
+// [x] Compatibility checker at purchase (aggression, temp, pH overlap)
+// [x] Aggression events in SIM.tick() (nipping, territory)
+// [ ] Schooling penalty expansion + stress bar in Fish tab
+//
+// ── SECTION 8 · ECONOMY & PROGRESSION (NEXT) ────────────────
+// [x] Daily income scales with tank success ($0.50/alive fish/day bonus)
+// [x] Achievement system: 'Cycle Complete', 'Breeder', 'Collector', etc.
+// [ ] Challenge modes: speed run, shoestring, disease gauntlet, planted-only
+// [ ] Phase expansion beyond sell_plant (breeding pair → full tank → premium fish)
+//
+// ── SECTION 9 · ENGAGEMENT / MINIGAME MECHANICS (LATER) ─────
+// [ ] Daily streak bonus: consecutive days = bonus money + streak gift
+// [ ] Observation reward: 30s idle = zen bonus $1
+// [ ] Named fish + personality flags (bold, shy, greedy)
+// [ ] Mystery bag in store: random pull with known drop rates
+// [ ] Weekly timed auction: rotating rare stock for 3 days
+// [x] Tank rating / visitor inspection: weekly score → income bonus
+// [ ] Crisis chemistry quiz: correct diagnosis = discounted treatment
+// [ ] Species collection / Pokedex: greyed-out until owned
+//
+// ── SECTION 10 · QUARANTINE TANK (LATER) ────────────────────
+// [ ] G.qTank second tank object using same SIM.tick() pipeline
+// [ ] Transfer action between tanks
+// [ ] 7-day quarantine protocol for new fish
+//
+// ── SECTION 11 · BIOLOGY ENCYCLOPEDIA (LATER) ───────────────
+// [ ] New CODEX tab: nitrogen cycle diagram, param explanations
+// [ ] Unlocked progressively as player encounters each mechanic
+// [ ] Contextual 'Learn more' links from event log entries
+//
+// ── SECTION 12 · PWA / MOBILE (LATER) ───────────────────────
+// [ ] Service worker + manifest for PWA install
+// [ ] Portrait mobile layout, larger touch targets
+// [ ] Cloud save: JSON upload/download
+//
+// ── SECTION 13 · GRAPHICS & RENDERER OVERHAUL (PORT) ────────
+// [ ] Species sprite pass: unique pixel art all 10 fish
+//     Priority: betta > neon tetra > corydoras > angelfish > rest
+// [ ] Render colorGene/satGene/patternGene from GENETICS on sprites
+// [ ] Plant sprite variants per species (currently all java fern)
+// [ ] Particle FX: feeding flakes, Ich white dots, treatment cloud
+// [ ] Day/night sky: bg gradient cycles blue→purple→black
+// [ ] Pourbaix / CO2 triangle: replace canvas lines with smooth fills
+// [ ] Port SIM.tick() → C++/C# (pure fn, no DOM); ITEMS → DataTable;
+//     BUS → Blueprint/UnityEvent; RENDER_ADAPTER → component system
+// ============================================================
+================================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aqua Sim v0.6</title>
+<!-- §STYLES -->
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #080c14; font-family: monospace; color: #e0f0ff; }
+  #app { max-width: 700px; margin: 0 auto; padding: 6px; }
+  #intro { background: rgba(0,0,0,0.92); padding: 10px; }
+  #game { display: none; }
+  #gc { display: block; width: 100%; image-rendering: pixelated; cursor: default; }
+
+  /* ── Action buttons ── */
+  #action-panel { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 3px; padding: 4px; background: #040112; }
+  .abtn { font-family: monospace; font-size: 10px; padding: 7px 4px; cursor: pointer; border-width: 2px; border-style: solid; }
+  #btn-feed  { background: #001800; border-color: #00aa00; color: #00ff44; }
+  #btn-water { background: #000820; border-color: #0055cc; color: #4499ff; }
+  #btn-store { background: #180800; border-color: #cc6600; color: #ffaa44; }
+  #btn-skip  { background: #180000; border-color: #cc0000; color: #ff5555; }
+
+  /* ── Tab system ── */
+  #tab-bar { display: flex; gap: 2px; background: #040112; padding: 4px 4px 0; border-bottom: 2px solid #cc44ff; }
+  .tab-btn { font-family: monospace; font-size: 10px; padding: 5px 10px; cursor: pointer;
+             background: #0a0520; border: 2px solid #440066; color: #aa88cc; border-bottom: none; }
+  .tab-btn.active { background: #050210; border-color: #cc44ff; color: #ff88ff; }
+  .tab-panel { display: none; background: #050210; border: 2px solid #cc44ff; border-top: none; padding: 8px; }
+  .tab-panel.active { display: block; }
+
+  /* ── Status panel (tab 0) ── */
+  #chem-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 3px; margin-bottom: 5px; }
+  #redox-bar { height: 14px; background: #0a0515; border: 1px solid #330044; position: relative; margin-bottom: 4px; }
+  #redox-fill { height: 100%; background: #228833; transition: width .4s; }
+  #redox-label { position: absolute; top:0; left:0; right:0; text-align:center; font-size:9px; line-height:14px; color:#fff; }
+  #forecast-row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+  #debug-panel { display:none; background:#110022; border:2px solid #cc44ff; padding:4px; font-size:9px; margin-top:4px; line-height:1.5; }
+
+  /* ── Chemistry chart panel (tab 1) ── */
+  #chart-canvas { display:block; width:100%; image-rendering:pixelated; }
+  #chart-legend { display:flex; flex-wrap:wrap; gap:6px; margin-top:5px; font-size:9px; }
+  .chart-legend-item { display:flex; align-items:center; gap:3px; }
+  .chart-legend-dot { width:8px; height:8px; border-radius:50%; }
+
+  /* ── Interactions table (tab 2) ── */
+  #ctab { border-collapse:collapse; width:100%; font-family:monospace; font-size:9px; table-layout:fixed; }
+
+  /* ── Fish profiles panel (tab 3) ── */
+  #fish-profiles { font-size:10px; }
+  .fish-card { background:#0a0520; border:1px solid #330055; padding:6px; margin-bottom:4px; }
+  .fish-card-name { color:#ff88ff; font-size:11px; margin-bottom:3px; }
+  .fish-bar-wrap { height:5px; background:#111; margin:2px 0; }
+  .fish-bar { height:100%; transition:width .3s; }
+
+  /* ── Store ── */
+  #store { display:none; background:#080418; border:2px solid #cc44ff; border-top:none; padding:8px; }
+  #store-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  #store-tabs { display:flex; gap:2px; margin-bottom:6px; }
+  .store-tab { font-family:monospace; font-size:9px; padding:3px 8px; cursor:pointer;
+               background:#0a0520; border:1px solid #440066; color:#aa88cc; }
+  .store-tab.active { border-color:#cc44ff; color:#ff88ff; background:#050210; }
+  #sitems { display:grid; grid-template-columns:repeat(2,1fr); gap:5px; margin-bottom:6px; }
+  #sell-section { display:none; border-top:2px solid #330055; padding-top:6px; margin-bottom:6px; }
+  #btn-store-close { font-family:monospace; font-size:10px; padding:6px 16px;
+                     background:#180000; border:2px solid #cc0000; color:#ff5555; cursor:pointer; display:block; margin:0 auto; }
+
+  /* ── Event log ── */
+  #elog { height:52px; overflow-y:auto; padding:4px 8px; background:#030110;
+          border:2px solid #cc44ff; border-top:none; font-size:10px; line-height:1.8; }
+</style>
+</head>
+<body>
+<!-- §HTML -->
+<div id="app">
+  <div id="intro"></div>
+  <div id="game">
+    <canvas id="gc" width="660" height="310"></canvas>
+
+    <div id="action-panel">
+      <button id="btn-feed"  class="abtn" onclick="AQUA.actions.feed()">FEED FISH</button>
+      <button id="btn-water" class="abtn" onclick="AQUA.actions.waterChange()">CHANGE WATER ($5)</button>
+      <button id="btn-store" class="abtn" onclick="AQUA.shop.open()">STORE</button>
+      <button id="btn-skip"  class="abtn" onclick="AQUA.actions.endDay()">END DAY</button>
+    </div>
+
+    <!-- TAB BAR -->
+    <div id="tab-bar">
+      <button class="tab-btn active" onclick="AQUA.panels.show(0)">TANK STATUS</button>
+      <button class="tab-btn"        onclick="AQUA.panels.show(1)">CHEMISTRY</button>
+      <button class="tab-btn"        onclick="AQUA.panels.show(2)">INTERACTIONS</button>
+      <button class="tab-btn"        onclick="AQUA.panels.show(3)">FISH</button>
+      <button class="tab-btn"        onclick="AQUA.panels.show(4)">Eh-pH</button>
+      <button class="tab-btn"        onclick="AQUA.panels.show(5)">CO2/KH/pH</button>
+      <button class="tab-btn"        onclick="AQUA.panels.show(6)">24H O2/CO2</button>
+      <button class="tab-btn"        onclick="AQUA.panels.show(7)">RATING</button>
+    </div>
+
+    <!-- TAB 0: Tank Status -->
+    <div class="tab-panel active" id="panel-0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:11px;color:#ff88ff;letter-spacing:1px">TANK STATUS</span>
+        <span style="font-size:10px;color:#888aaa">Day <span id="day-num">1</span> | $<span id="money-num">50</span> | <span id="phase-txt" style="color:#88ffaa"></span></span>
+      </div>
+      <div id="chem-grid"></div>
+      <div style="font-size:9px;color:#556677;margin-bottom:2px">REDOX / TANK HEALTH</div>
+      <div id="redox-bar"><div id="redox-fill"></div><div id="redox-label"></div></div>
+      <div style="font-size:9px;color:#556677;margin-bottom:2px">TOMORROW'S FORECAST</div>
+      <div id="forecast-row"></div>
+      <div id="cycling-panel" style="margin:4px 0"></div>
+      <div style="font-size:9px;color:#556677;margin-bottom:2px;margin-top:5px">WHAT'S CHANGING &amp; WHY</div>
+      <div id="delta-breakdown" style="background:#030110;border:1px solid #220033;padding:4px;margin-bottom:4px;font-size:9px;line-height:1.8;max-height:90px;overflow-y:auto"></div>
+      <div style="font-size:9px;color:#556677;margin-bottom:2px;margin-top:4px">EQUIPMENT NIGHT TIMERS (auto-off at night)</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+        <label style="font-size:9px;color:#44ddff;cursor:pointer">
+          <input type="checkbox" id="timer-light" onchange="AQUA.actions.setTimer('lightOff',this.checked)" checked> LIGHTS OFF at night
+        </label>
+        <label style="font-size:9px;color:#88ffcc;cursor:pointer">
+          <input type="checkbox" id="timer-co2" onchange="AQUA.actions.setTimer('co2Off',this.checked)" checked> CO2 OFF at night
+        </label>
+      </div>
+      <label style="font-size:9px;color:#cc88ff;cursor:pointer;margin-top:3px;display:block">
+        <input type="checkbox" id="debug-toggle" onchange="AQUA.ui.toggleDebug()"> SHOW NUMERIC RATES
+      </label>
+      <div id="debug-panel"></div>
+    </div>
+
+    <!-- TAB 1: Chemistry Charts -->
+    <div class="tab-panel" id="panel-1">
+      <div style="font-size:9px;color:#cc88ff;margin-bottom:4px;letter-spacing:1px">CHEMISTRY HISTORY — LAST 60 DAYS</div>
+      <div style="font-size:9px;color:#556677;margin-bottom:4px">Click a parameter to highlight it</div>
+      <canvas id="chart-canvas" width="660" height="220"></canvas>
+      <div id="chart-legend"></div>
+    </div>
+
+    <!-- TAB 2: Interactions -->
+    <div class="tab-panel" id="panel-2">
+      <div style="font-size:9px;color:#cc88ff;margin-bottom:5px;letter-spacing:1px">CHEMISTRY INTERACTIONS</div>
+      <div style="overflow-x:auto"><table id="ctab"></table></div>
+    </div>
+
+    <!-- TAB 3: Fish Profiles -->
+    <div class="tab-panel" id="panel-3">
+      <div style="font-size:9px;color:#cc88ff;margin-bottom:5px;letter-spacing:1px">TANK INHABITANTS</div>
+      <div id="fish-profiles"></div>
+    </div>
+
+    <!-- TAB 4: Pourbaix (Eh-pH) Diagram -->
+    <div class="tab-panel" id="panel-4">
+      <div style="font-size:9px;color:#cc88ff;margin-bottom:3px;letter-spacing:1px">Eh-pH (POURBAIX) DIAGRAM — LIVE TANK STATE</div>
+      <div style="font-size:9px;color:#556677;margin-bottom:4px">Eh = redox potential (mV). Tank dot moves in realtime. Red = outside safe zone.</div>
+      <canvas id="pourbaix-canvas" width="660" height="280" style="display:block;width:100%;image-rendering:pixelated"></canvas>
+      <div id="pourbaix-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:9px"></div>
+    </div>
+
+    <!-- TAB 5: CO2 / KH / pH Triangle -->
+    <div class="tab-panel" id="panel-5">
+      <div style="font-size:9px;color:#cc88ff;margin-bottom:3px;letter-spacing:1px">CO2 / KH / pH LOOKUP TABLE</div>
+      <div style="font-size:9px;color:#556677;margin-bottom:4px">Given KH (rows) and CO2 ppm (columns) → resulting pH. Your tank highlighted.</div>
+      <canvas id="co2kh-canvas" width="660" height="280" style="display:block;width:100%;image-rendering:pixelated"></canvas>
+      <div id="co2kh-info" style="font-size:9px;color:#88aacc;margin-top:4px;padding:4px;background:#050210;border:1px solid #330055"></div>
+    </div>
+
+    <!-- TAB 6: 24-Hour O2/CO2 Diurnal Chart -->
+    <div class="tab-panel" id="panel-6">
+      <div style="font-size:9px;color:#cc88ff;margin-bottom:3px;letter-spacing:1px">24-HOUR O2 / CO2 DIURNAL CYCLE — LAST NIGHT</div>
+      <div style="font-size:9px;color:#556677;margin-bottom:4px">Shows O2 and CO2 across the full day/night cycle. Night zone shaded. O2 nadir flagged.</div>
+      <canvas id="diurnal-canvas" width="660" height="200" style="display:block;width:100%;image-rendering:pixelated"></canvas>
+      <div id="diurnal-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;font-size:9px"></div>
+    </div>
+
+    <!-- NIGHT OVERLAY — shown during night transition, hidden otherwise -->
+    <div id="night-overlay" style="display:none;position:relative;background:#020008;border:2px solid #2200aa;padding:10px;margin-top:4px">
+      <div style="font-size:13px;color:#4444ff;letter-spacing:2px;text-align:center;margin-bottom:6px">~ NIGHT ~</div>
+      <div id="night-status" style="font-size:10px;color:#8888ff;text-align:center;margin-bottom:6px">Tank cycling overnight...</div>
+      <canvas id="night-canvas" width="640" height="80" style="display:block;width:100%;image-rendering:pixelated;margin-bottom:6px"></canvas>
+      <div id="night-summary" style="font-size:9px;color:#aaaacc;display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px"></div>
+      <div style="font-size:9px;color:#556677;text-align:center;margin-top:6px" id="night-footer">Morning in a moment...</div>
+    </div>
+
+    <!-- TAB 7: Tank Rating + Achievements -->
+    <div class="tab-panel" id="panel-7">
+      <div style="font-size:9px;color:#cc88ff;margin-bottom:5px;letter-spacing:1px">TANK RATING &amp; ACHIEVEMENTS</div>
+      <div id="rating-panel"></div>
+    </div>
+
+    <!-- Random event card (in-flow, above event log) -->
+    <div id="event-card" style="display:none;border:2px solid #cc4400;padding:8px;margin-bottom:2px;font-family:monospace;font-size:10px"></div>
+
+    <!-- Achievement toast -->
+    <div id="ach-toast" style="display:none;background:#001a00;border:2px solid #00cc44;padding:6px 10px;margin-bottom:2px;font-family:monospace;font-size:10px;color:#44ff88"></div>
+
+    <div id="elog"></div>
+
+    <!-- STORE -->
+    <div id="store">
+      <div id="store-header">
+        <span style="font-size:13px;color:#ffdd44;letter-spacing:1px">~ PET STORE ~</span>
+        <span style="font-size:10px;color:#ff88ff">$<span id="sbal">0</span></span>
+      </div>
+      <div id="store-tabs">
+        <button class="store-tab active" onclick="AQUA.shop.showCat('fish')">FISH</button>
+        <button class="store-tab" onclick="AQUA.shop.showCat('cleaner')">CLEANERS</button>
+        <button class="store-tab" onclick="AQUA.shop.showCat('plant')">PLANTS</button>
+        <button class="store-tab" onclick="AQUA.shop.showCat('equip')">EQUIPMENT</button>
+        <button class="store-tab" onclick="AQUA.shop.showCat('other')">OTHER</button>
+      </div>
+      <div id="sitems"></div>
+      <div id="sell-section">
+        <div style="font-size:10px;color:#88ffaa;margin-bottom:4px">SELL GROWN PLANTS:</div>
+        <div id="sell-items"></div>
+      </div>
+      <button id="btn-store-close" onclick="AQUA.shop.close()">LEAVE STORE</button>
+    </div>
+  </div>
+</div>
+
+<script>
+
+var AQUA = {};
+
+// ════════════════════════════════════════════════════════════════
+// §BUS  —  AQUA.BUS — Central event bus
+// Search handle: §BUS
+// ════════════════════════════════════════════════════════════════
+
+// ============================================================
+// AQUA.BUS — Event bus (unchanged from v7)
+// PORT NOTE: replace .on() subscriptions with Blueprint event dispatchers
+// ============================================================
+AQUA.BUS = (function() {
+  var _L = {};
+  return {
+    on:   function(e,fn){ (_L[e]||(_L[e]=[])).push(fn); },
+    off:  function(e,fn){ if(_L[e])_L[e]=_L[e].filter(function(f){return f!==fn;}); },
+    emit: function(e,d){ (_L[e]||[]).forEach(function(fn){fn(d);}); }
+  };
+})();
+
+// ============================================================
+// AQUA.ITEMS — Pure JSON data table. Zero functions.
+// PORT NOTE: export as Unreal DataTable (CSV/JSON import).
+// Adding new species = add a row here. Engine never changes.
+//
+// Fish stats reference:
+//   o2c   = O2 consumption per gram per tick (at 76°F)
+//   co2p  = CO2 production per gram per tick
+//   nh3p  = NH3 production per gram per tick
+//   wp    = organic waste per gram per tick
+//   po4p  = PO4 production per gram per tick
+//   nh3l  = NH3 lethal threshold (ppm)
+//   no2l  = NO2 lethal threshold (ppm)
+//   o2min = minimum tolerated O2 (ppm)
+//   aggression  = 0-1 (0=peaceful, 1=very aggressive)
+//   schooling   = true if stressed when alone
+//   tempMin/Max = tolerated °F range
+//   behaviors   = string tags used by future compatibility checker
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §DATA  —  AQUA.ITEMS — Pure species/equipment data table (zero functions)
+// Search handle: §DATA
+// ════════════════════════════════════════════════════════════════
+
+AQUA.ITEMS = {
+
+  // ── FISH ──────────────────────────────────────────────────
+  goldfish: {
+    name:'Goldfish', type:'fish', mass:5, cost:8,
+    o2c:0.12, co2p:0.10, nh3p:0.022, wp:0.045, po4p:0.008,
+    phmin:6.5, phmax:8.0, nh3l:0.5, no2l:1.0, no3l:80, o2min:4,
+    aggression:0.1, schooling:false, tempMin:65, tempMax:80,
+    behaviors:[], spriteGroup:'goldfish',
+    desc:'Hardy, very messy. Great starter fish.',
+    attrs:['+Hardy','-Messy','+O2 drain']
+  },
+  guppy: {
+    name:'Guppy', type:'fish', mass:1.5, cost:3,
+    o2c:0.10, co2p:0.08, nh3p:0.0132, wp:0.027, po4p:0.0048,
+    phmin:7.0, phmax:8.0, nh3l:0.3, no2l:0.8, no3l:60, o2min:3.5,
+    aggression:0.0, schooling:true, tempMin:72, tempMax:82,
+    behaviors:['livebearing'], spriteGroup:'guppy',
+    desc:'Small, colorful, peaceful livebearers.',
+    attrs:['+Peaceful','+Schooling','-Low NH3 tolerance']
+  },
+  betta: {
+    name:'Betta', type:'fish', mass:2.5, cost:12,
+    o2c:0.09, co2p:0.07, nh3p:0.011, wp:0.022, po4p:0.004,
+    phmin:6.0, phmax:8.0, nh3l:0.4, no2l:0.9, no3l:70, o2min:4,
+    aggression:0.8, schooling:false, tempMin:76, tempMax:82,
+    behaviors:['labyrinth','aggressive_male'], spriteGroup:'guppy',
+    desc:'Stunning soloist. Will fight other bettas.',
+    attrs:['+Beautiful','-Aggressive','+Labyrinth breather']
+  },
+  neon_tetra: {
+    name:'Neon Tetra', type:'fish', mass:0.8, cost:2,
+    o2c:0.08, co2p:0.06, nh3p:0.008, wp:0.015, po4p:0.003,
+    phmin:6.0, phmax:7.5, nh3l:0.2, no2l:0.5, no3l:40, o2min:5,
+    aggression:0.0, schooling:true, tempMin:70, tempMax:78,
+    behaviors:['schooling'], spriteGroup:'guppy',
+    desc:'Iconic schooling fish. Needs soft, acidic water.',
+    attrs:['+Schooling','-Sensitive','+Low bioload']
+  },
+  corydoras: {
+    name:'Corydoras', type:'fish', mass:3, cost:5,
+    o2c:0.07, co2p:0.06, nh3p:0.010, wp:0.020, po4p:0.004,
+    phmin:6.0, phmax:7.8, nh3l:0.3, no2l:0.7, no3l:60, o2min:4,
+    aggression:0.0, schooling:true, tempMin:70, tempMax:78,
+    behaviors:['schooling','bottom_dweller','armored'], spriteGroup:'guppy',
+    desc:'Armored bottom-dweller. Scavenges leftover food.',
+    attrs:['+Bottom cleaner','+Peaceful','+Schooling']
+  },
+  angelfish: {
+    name:'Angelfish', type:'fish', mass:8, cost:18,
+    o2c:0.11, co2p:0.09, nh3p:0.018, wp:0.035, po4p:0.007,
+    phmin:6.0, phmax:7.5, nh3l:0.3, no2l:0.6, no3l:60, o2min:5,
+    aggression:0.4, schooling:false, tempMin:76, tempMax:84,
+    behaviors:['cichlid','pairs'], spriteGroup:'goldfish',
+    desc:'Elegant cichlid. Can be nippy with small fish.',
+    attrs:['+Striking','-Nippy with small fish','-Sensitive to NH3']
+  },
+  molly: {
+    name:'Molly', type:'fish', mass:3, cost:4,
+    o2c:0.10, co2p:0.08, nh3p:0.014, wp:0.028, po4p:0.005,
+    phmin:7.0, phmax:8.5, nh3l:0.4, no2l:0.9, no3l:80, o2min:3.5,
+    aggression:0.1, schooling:true, tempMin:72, tempMax:82,
+    behaviors:['livebearing','salt_tolerant'], spriteGroup:'guppy',
+    desc:'Hardy livebearer. Tolerates brackish water.',
+    attrs:['+Hardy','+Salt tolerant','+Livebearing']
+  },
+  platy: {
+    name:'Platy', type:'fish', mass:2, cost:3,
+    o2c:0.09, co2p:0.07, nh3p:0.012, wp:0.024, po4p:0.004,
+    phmin:7.0, phmax:8.0, nh3l:0.4, no2l:0.9, no3l:80, o2min:3.5,
+    aggression:0.0, schooling:true, tempMin:64, tempMax:80,
+    behaviors:['livebearing'], spriteGroup:'guppy',
+    desc:'Colorful, easy livebearer. Wide temp tolerance.',
+    attrs:['+Peaceful','+Colorful','+Wide temp range']
+  },
+  otocinclus: {
+    name:'Otocinclus', type:'fish', mass:1.5, cost:4,
+    o2c:0.06, co2p:0.05, nh3p:0.007, wp:0.010, po4p:0.002,
+    phmin:6.0, phmax:7.5, nh3l:0.2, no2l:0.5, no3l:40, o2min:5,
+    aggression:0.0, schooling:true, tempMin:70, tempMax:79,
+    behaviors:['algae_eater','schooling','sensitive'], spriteGroup:'guppy',
+    desc:'Tiny algae-eating catfish. Very sensitive to bad water.',
+    attrs:['-Algae','+Tiny','-Very sensitive']
+  },
+  rainbowfish: {
+    name:'Rainbowfish', type:'fish', mass:4, cost:8,
+    o2c:0.11, co2p:0.09, nh3p:0.016, wp:0.030, po4p:0.006,
+    phmin:7.0, phmax:8.0, nh3l:0.4, no2l:0.9, no3l:70, o2min:4,
+    aggression:0.1, schooling:true, tempMin:72, tempMax:82,
+    behaviors:['schooling','active'], spriteGroup:'goldfish',
+    desc:'Active, colorful schooling fish from Australia.',
+    attrs:['+Active','+Colorful','+Schooling']
+  },
+
+  // ── CLEANERS ──────────────────────────────────────────────
+  shrimp: {
+    name:'Cherry Shrimp', type:'cleaner', mass:0.5, cost:4,
+    oc:0.15, nh3p:0.005,
+    phmin:6.5, phmax:7.8, tempMin:65, tempMax:78,
+    behaviors:['shrimp','color_gene'], spriteGroup:'shrimp',
+    desc:'Red algae-eating shrimp. Breeding affects color intensity.',
+    attrs:['-Algae','-Waste','+Breedable color']
+  },
+  amano_shrimp: {
+    name:'Amano Shrimp', type:'cleaner', mass:1.5, cost:6,
+    oc:0.30, nh3p:0.008,
+    phmin:6.5, phmax:7.8, tempMin:65, tempMax:78,
+    behaviors:['shrimp'], spriteGroup:'shrimp',
+    desc:'Larger shrimp, excellent algae eater. Cannot breed in freshwater.',
+    attrs:['-Algae (powerful)','-Waste','+Hardy']
+  },
+  ghost_shrimp: {
+    name:'Ghost Shrimp', type:'cleaner', mass:0.8, cost:2,
+    oc:0.20, nh3p:0.006,
+    phmin:6.5, phmax:8.0, tempMin:65, tempMax:80,
+    behaviors:['shrimp'], spriteGroup:'shrimp',
+    desc:'Transparent scavengers. Excellent feeder / janitor.',
+    attrs:['-Waste','+Cheap','+Hardy']
+  },
+  snail: {
+    name:'Nerite Snail', type:'cleaner', mass:2, cost:4,
+    oc:0.10, nh3p:0.01,
+    phmin:7.0, phmax:8.5, tempMin:65, tempMax:82,
+    behaviors:['snail'], spriteGroup:'snail',
+    desc:'Algae-eating snail. Won\'t overpopulate.',
+    attrs:['-Algae','-Waste','+No breeding']
+  },
+  mystery_snail: {
+    name:'Mystery Snail', type:'cleaner', mass:3, cost:5,
+    oc:0.12, nh3p:0.015,
+    phmin:7.0, phmax:8.5, tempMin:68, tempMax:82,
+    behaviors:['snail','large'], spriteGroup:'snail',
+    desc:'Large, colorful snail. Eats algae and decaying matter.',
+    attrs:['-Algae','-Detritus','+Colorful']
+  },
+
+  // ── PLANTS ─────────────────────────────────────────────────
+  javafern: {
+    name:'Java Fern', type:'plant', mass:3, cost:6,
+    co2c:0.10, o2p:0.12, no3c:0.14, po4c:0.07, nh3c:0.03, surfPerG:9,
+    lightNeeded:0.15, growRate:0.035,
+    desc:'Slow-growing, low-light plant. Attaches to hardscape.',
+    attrs:['-NO3','-PO4','-NH3','+O2','+Surface']
+  },
+  amazon_sword: {
+    name:'Amazon Sword', type:'plant', mass:5, cost:9,
+    co2c:0.18, o2p:0.22, no3c:0.26, po4c:0.14, nh3c:0.05, surfPerG:14,
+    lightNeeded:0.4, growRate:0.05,
+    desc:'Large, heavy feeder. Needs strong light & root tabs.',
+    attrs:['-NO3 (heavy)','-PO4','+O2','+Surface']
+  },
+  anubias: {
+    name:'Anubias', type:'plant', mass:2, cost:8,
+    co2c:0.06, o2p:0.07, no3c:0.09, po4c:0.04, nh3c:0.02, surfPerG:6,
+    lightNeeded:0.1, growRate:0.015,
+    desc:'Very slow, bulletproof low-light plant. Algae magnet in bright light.',
+    attrs:['-NO3','+Very hardy','+Low light']
+  },
+  hornwort: {
+    name:'Hornwort', type:'plant', mass:3, cost:5,
+    co2c:0.16, o2p:0.20, no3c:0.24, po4c:0.12, nh3c:0.04, surfPerG:10,
+    lightNeeded:0.3, growRate:0.08,
+    desc:'Fast-growing stem plant. Excellent nitrate sponge.',
+    attrs:['-NO3 (fast)','-PO4','+O2','+Fast growth']
+  },
+  duckweed: {
+    name:'Duckweed', type:'plant', mass:1, cost:2,
+    co2c:0.14, o2p:0.17, no3c:0.20, po4c:0.10, nh3c:0.035, surfPerG:4,
+    lightNeeded:0.3, growRate:0.15,
+    desc:'Floating plant. Explosive growth absorbs nutrients rapidly.',
+    attrs:['-NO3 (explosive)','-NH3','+O2','-Blocks light below']
+  },
+
+  // ── DECOR ──────────────────────────────────────────────────
+  fakeplant: {
+    name:'Fake Plant', type:'decor', mass:0, cost:3,
+    desc:'Decoration only. Provides fish shelter.',
+    attrs:['Shelter only']
+  },
+
+  // ── EQUIPMENT ─────────────────────────────────────────────
+  bubbler: {
+    name:'Air Bubbler', type:'equip', cost:8,
+    onInstall:[{stat:'surf',delta:60}], perTick:[{stat:'o2',delta:1.2}],
+    flags:['hasBubbler'],
+    desc:'Surface agitation raises O2 and drives CO2 out. Adds biofilm surface area.',
+    attrs:['+O2','-CO2 (outgassing)','+Surface area']
+  },
+  filter: {
+    name:'Sponge Filter', type:'equip', cost:10,
+    onInstall:[{stat:'surf',delta:160}],
+    perTick:[{stat:'bact',delta:0.15},{stat:'o2',delta:0.4}],
+    flags:['hasFilter'],
+    desc:'Entry-level filter. Good biofilm surface area.',
+    attrs:['+Bacteria','+Surface','+O2']
+  },
+  hob_filter: {
+    name:'HOB Filter', type:'equip', cost:28,
+    onInstall:[{stat:'surf',delta:320}],
+    perTick:[{stat:'bact',delta:0.28},{stat:'o2',delta:0.8}],
+    flags:['hasFilter','hasHOB','hasBubbler'],
+    desc:'Hang-on-back filter. Double the bacteria surface of a sponge.',
+    attrs:['+Bacteria (strong)','+Surface (high)','+O2']
+  },
+  light: {
+    name:'LED Light', type:'equip', cost:15,
+    onInstall:[], perTick:[],
+    flags:['hasLight'],
+    desc:'Full-spectrum LED. Enables plant photosynthesis.',
+    attrs:['+Photosynthesis','+Plant growth']
+  },
+  co2_injector: {
+    name:'CO2 Injector', type:'equip', cost:35,
+    onInstall:[], perTick:[{stat:'co2',delta:3.5}],
+    flags:['hasCO2'],
+    desc:'Pressurized CO2. Supercharges plant growth. Monitor pH.',
+    attrs:['+CO2 (high)','+Plant turbo','-pH drop risk']
+  },
+  uv_sterilizer: {
+    name:'UV Sterilizer', type:'equip', cost:40,
+    onInstall:[], perTick:[{stat:'algae',delta:-0.08}],
+    flags:['hasUV'],
+    desc:'Kills suspended algae and pathogens in water column.',
+    attrs:['-Algae (ongoing)','-Pathogens']
+  },
+  heater: {
+    name:'Adjustable Heater', type:'equip', cost:18,
+    onInstall:[{stat:'temp_stable',delta:1}], perTick:[],
+    flags:['hasHeater'],
+    desc:'Stabilizes water temperature. Required for tropical fish.',
+    attrs:['+Temp stable','+Tropical fish safe']
+  },
+
+  // ── CONSUMABLES ────────────────────────────────────────────
+  roottabs: {
+    name:'Root Tabs (5x)', type:'consumable', cost:9,
+    onUse:[{action:'boostPlants', targetType:'plant', stat:'mass', delta:2.0}],
+    desc:'Releases nutrients at roots. Boosts all plant growth.',
+    attrs:['+Plant growth (all)']
+  },
+  fish_meds: {
+    name:'Aquarium Salt', type:'consumable', cost:7,
+    onUse:[{action:'reduceStat', stat:'no2', factor:0.7},{action:'boostFishHealth', delta:5}],
+    desc:'Reduces nitrite toxicity. Helps fish recover from stress.',
+    attrs:['-NO2 toxicity','+Fish stress recovery']
+  },
+  dechlorinator: {
+    name:'Dechlorinator', type:'consumable', cost:5,
+    onUse:[{action:'boostFishHealth', delta:3}],
+    desc:'Neutralizes chlorine/chloramine in tap water. Use after water change.',
+    attrs:['+Water safety','+Fish health']
+  },
+
+  // ── SUBSTRATE ──────────────────────────────────────────────
+  aquasoil: {
+    name:'Aquasoil Substrate', type:'substrate', cost:18,
+    onInstall:[{stat:'surf',delta:85}], perTick:[],
+    desc:'Active substrate. Boosts biofilm & plant root nutrition.',
+    attrs:['+Surface','+Plant roots','+Bacteria']
+  },
+
+  // ── KH/GH ITEMS ──────────────────────────────────────────
+  crushed_coral: {
+    name:'Crushed Coral', type:'consumable', cost:6,
+    onUse:[{action:'raiseStat', stat:'kh', delta:2.0}],
+    desc:'Raises KH (carbonate hardness). Buffers pH against acid crash. Essential with CO2 injection.',
+    attrs:['+KH','+pH buffer','+Prevents acid crash']
+  },
+  remineralizer: {
+    name:'Remineralizer', type:'consumable', cost:8,
+    onUse:[{action:'raiseStat', stat:'gh', delta:3.0},{action:'raiseStat', stat:'kh', delta:0.5}],
+    desc:'Raises GH (Ca+Mg). Required for hard-water species like livebearers and snails.',
+    attrs:['+GH','+KH (small)','+Hard-water fish health']
+  },
+
+  // ── DISEASE TREATMENTS ───────────────────────────────────
+  ich_treatment: {
+    name:'Ich Treatment', type:'consumable', cost:12,
+    onUse:[{action:'treatDisease', disease:'ich', tempBoost:2, days:3}],
+    desc:'Raises temperature 2°F for 3 days to break Ich lifecycle. Stresses sensitive fish.',
+    attrs:['-Ich','-Sensitive fish stress','+Temp boost 3 days']
+  },
+  methylene_blue: {
+    name:'Methylene Blue', type:'consumable', cost:10,
+    onUse:[{action:'treatDisease', disease:'fin_rot', bacteriaDmg:0.3}],
+    desc:'Antifungal/antibacterial. Clears Fin Rot but damages nitrifying bacteria colony.',
+    attrs:['-Fin Rot','-Bacteria colony (30%)','+Fish health']
+  },
+  copper_sulfate: {
+    name:'Copper Sulfate', type:'consumable', cost:14,
+    onUse:[{action:'treatDisease', disease:'velvet', killsShrimp:true}],
+    desc:'Effective against Velvet. WARNING: lethal to shrimp and snails. Remove invertebrates first.',
+    attrs:['-Velvet','-Shrimp/snails LETHAL','+Fish health']
+  }
+};
+
+// ============================================================
+// AQUA.FX — Effect resolver (expanded for new actions)
+// PORT NOTE: rewrite as C++ switch/case or Blueprint function library.
+// Descriptors are pure data, identical on both sides of the port.
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §FX  —  AQUA.FX, AQUA.GENETICS, AQUA.CHEM_HISTORY
+// Search handle: §FX
+// ════════════════════════════════════════════════════════════════
+
+// ============================================================
+
+AQUA.FX = {
+  applyInstall: function(descriptors, G) {
+    (descriptors||[]).forEach(function(d) {
+      if (d.stat === 'surf')        G.surf   = (G.surf||0) + d.delta;
+      if (d.stat === 'temp_stable') G.tempStable = true;
+    });
+  },
+  applyPerTick: function(descriptors, delta) {
+    (descriptors||[]).forEach(function(d) {
+      if (d.stat in delta) delta[d.stat] += d.delta;
+    });
+  },
+  applyUse: function(descriptors, G) {
+    (descriptors||[]).forEach(function(d) {
+      if (d.action === 'boostPlants') {
+        G.plants.forEach(function(p) {
+          if (p.type === 'plant') p.mass = (p.mass||0) + d.delta;
+        });
+        AQUA.BUS.emit('log',{msg:'Root tabs boosted all plants!', type:'ok'});
+      }
+      if (d.action === 'reduceStat') {
+        if (d.stat in G.chem) G.chem[d.stat] *= (d.factor||1);
+        AQUA.BUS.emit('log',{msg:'Aquarium salt reduced NO2 toxicity.', type:'ok'});
+      }
+      if (d.action === 'boostFishHealth') {
+        G.fish.forEach(function(f) {
+          if (f.alive) { f.health = Math.min(100,(f.health||100)+d.delta); f.stress = Math.max(0,(f.stress||0)-10); }
+        });
+        AQUA.BUS.emit('log',{msg:'Treatment applied — fish recovering.', type:'ok'});
+      }
+      // ── KH/GH raise ──────────────────────────────────────
+      if (d.action === 'raiseStat') {
+        if (d.stat === 'kh') { G.chem.kh = Math.min(20, (G.chem.kh||0) + d.delta); AQUA.BUS.emit('log',{msg:'KH raised to '+G.chem.kh.toFixed(1)+' dKH.', type:'ok'}); }
+        if (d.stat === 'gh') { G.chem.gh = Math.min(30, (G.chem.gh||0) + d.delta); AQUA.BUS.emit('log',{msg:'GH raised to '+G.chem.gh.toFixed(1)+' dGH.', type:'ok'}); }
+      }
+      // ── Disease treatments ────────────────────────────────
+      if (d.action === 'treatDisease') {
+        if (d.killsShrimp) {
+          var inv = G.cleaners.filter(function(c){return ((AQUA.ITEMS[c.key]||{}).behaviors||[]).indexOf('shrimp')>=0;});
+          if (inv.length > 0) {
+            AQUA.BUS.emit('log',{msg:'WARNING: Copper is lethal to shrimp/snails! Remove them first.',type:'danger'});
+            return;
+          }
+        }
+        if (!G.activeTreatments) G.activeTreatments = [];
+        G.activeTreatments.push({disease:d.disease, daysLeft:(d.days||3), tempBoost:(d.tempBoost||0), bacteriaDmg:(d.bacteriaDmg||0)});
+        G.fish.forEach(function(f) {
+          if (f.alive && f.disease === d.disease) { f.disease = null; f.daysSick = 0; f.severity = 0; f.health = Math.min(100,(f.health||100)+10); }
+        });
+        if (d.bacteriaDmg) { G.chem.bact = Math.max(0, (G.chem.bact||0.1) - d.bacteriaDmg); AQUA.BUS.emit('log',{msg:'Methylene Blue applied — bacteria colony weakened!', type:'warn'}); }
+        if (d.tempBoost)   { G.chem.temp += d.tempBoost; AQUA.BUS.emit('log',{msg:'Ich treatment: temp raised to '+G.chem.temp+'°F for '+d.days+' days.', type:'info'}); }
+        AQUA.BUS.emit('log',{msg:'Treating '+d.disease.replace('_',' ')+' — check Fish tab.', type:'ok'});
+      }
+    });
+  },
+  hasFlag: function(G, flag) {
+    return G.equip.some(function(k){ return ((AQUA.ITEMS[k]||{}).flags||[]).indexOf(flag)>=0; });
+  }
+};
+
+// ============================================================
+// AQUA.GENETICS — Color and trait gene scaffold
+// Lives on each fish/shrimp instance. Mechanics are fully functional
+// now. The renderer currently ignores these values — they will be
+// read during the graphics overhaul to tint sprites or drive 3D material
+// parameters in Unreal.
+//
+// colorGene:  HSL hue offset (0-360). 0 = species default.
+// satGene:    0-1 saturation multiplier. 1 = vivid, 0 = washed out.
+// patternGene: 'solid'|'spotted'|'striped'|'metallic' — informs future shader
+// sizeGene:   0.8-1.2 scale multiplier applied to mass at birth
+// diseaseResist: 0-1 probability of resisting infection events
+// ============================================================
+AQUA.GENETICS = {
+  // Generate a random gene set for a freshly bought animal
+  randomGenes: function(itemKey) {
+    var it = AQUA.ITEMS[itemKey] || {};
+    return {
+      colorGene:    Math.floor(Math.random() * 360),
+      satGene:      0.6 + Math.random() * 0.4,
+      patternGene:  ['solid','spotted','striped','metallic'][Math.floor(Math.random()*4)],
+      sizeGene:     0.9 + Math.random() * 0.2,
+      diseaseResist:0.2 + Math.random() * 0.4
+    };
+  },
+  // Blend two parent gene sets to produce offspring genes
+  // Each gene independently draws from one parent or blends
+  inherit: function(geneA, geneB) {
+    function blend(a, b) { return a + (b-a) * Math.random(); }
+    function pick(a, b)  { return Math.random() < 0.5 ? a : b; }
+    var mutate = Math.random() < 0.08; // 8% mutation chance
+    return {
+      colorGene:    mutate ? Math.floor(Math.random()*360) : Math.round(blend(geneA.colorGene, geneB.colorGene)),
+      satGene:      Math.min(1, Math.max(0, blend(geneA.satGene, geneB.satGene) + (mutate?((Math.random()-.5)*.3):0))),
+      patternGene:  pick(geneA.patternGene, geneB.patternGene),
+      sizeGene:     Math.min(1.4, Math.max(0.7, blend(geneA.sizeGene, geneB.sizeGene))),
+      diseaseResist:Math.min(1, Math.max(0, blend(geneA.diseaseResist, geneB.diseaseResist)))
+    };
+  },
+  // Human-readable gene summary (for Fish Profiles panel)
+  describe: function(genes) {
+    if (!genes) return 'Unknown';
+    var hue = genes.colorGene;
+    var hueName = hue<30?'Red':hue<60?'Orange':hue<90?'Yellow':hue<150?'Green':hue<200?'Cyan':hue<260?'Blue':hue<300?'Purple':'Pink';
+    var sat = genes.satGene > 0.8 ? 'Vivid' : genes.satGene > 0.5 ? 'Normal' : 'Pale';
+    return sat+' '+hueName+' / '+genes.patternGene+' / Resist '+Math.round(genes.diseaseResist*100)+'%';
+  }
+};
+
+// ============================================================
+// AQUA.CHEM_HISTORY — Rolling 60-day log of chemistry params
+// Stored in state G.chemHistory[]. Each entry is a snapshot of
+// chem at end of that day.
+// PORT NOTE: same data structure works on Unreal side — serialize to
+// a TArray<FChemSnapshot> struct. PANELS.drawCharts() reads it directly.
+// ============================================================
+AQUA.CHEM_HISTORY = {
+  MAX_DAYS: 60,
+  record: function(G) {
+    if (!G.chemHistory) G.chemHistory = [];
+    var c = G.chem;
+    G.chemHistory.push({
+      day: G.day,
+      ph: c.ph, nh3: c.nh3, no2: c.no2, no3: c.no3,
+      o2: c.o2, co2: c.co2, po4: c.po4,
+      org: c.org, bact: c.bact, algae: G.algae||0,
+      redox: AQUA.SIM.redoxScore(G),
+      kh: c.kh||4, gh: c.gh||8
+    });
+    if (G.chemHistory.length > AQUA.CHEM_HISTORY.MAX_DAYS) G.chemHistory.shift();
+  }
+};
+
+// ============================================================
+// AQUA.SIM — Pure simulation engine (unchanged contract from v7)
+// PORT NOTE: tick() -> {newState, events[]}. Pure function. No DOM.
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §SIM  —  AQUA.SIM — Pure simulation engine (tick, nightTicks, calcDeltas)
+// Search handle: §SIM
+// ════════════════════════════════════════════════════════════════
+
+// PORT NOTE: tick() and nightTicks() translate directly to C++/C# pure functions.
+// ITEMS data is identical on both sides. BUS events map to delegate calls.
+// ============================================================
+
+AQUA.SIM = {
+  _clone: function(G) { return JSON.parse(JSON.stringify(G)); },
+
+  getTotalSurf: function(G) {
+    var s = 0;
+    G.plants.forEach(function(p) {
+      var it = AQUA.ITEMS[p.key] || {};
+      if (p.type === 'plant') s += (it.surfPerG||9) * (p.mass||1);
+    });
+    return G.surf + s;
+  },
+
+  calcDeltas: function(chem, fed, G, timeOfDay) {
+    var c = chem;
+    // PORT NOTE: timeOfDay is pure data passed in — renderer reads G.timeOfDay separately.
+    // lightLevel drives all photosynthesis; equipment timers (lightSchedule) shut off
+    // specific gear at night without removing it from G.equip.
+    var isNight = (timeOfDay === 'night');
+    var sched = G.lightSchedule || {};
+    var lightHardwareOn = AQUA.FX.hasFlag(G,'hasLight') && !(isNight && sched.lightOff);
+    var co2HardwareOn   = AQUA.FX.hasFlag(G,'hasCO2')   && !(isNight && sched.co2Off);
+    var lightLevel = lightHardwareOn ? 1.0 : (isNight ? 0.0 : 0.15);
+    var totalSurf  = AQUA.SIM.getTotalSurf(G);
+    var surfFactor = Math.min(3.0, totalSurf/100) + 0.012*(totalSurf/100);
+    var d = {o2:0,co2:0,nh3:0,no2:0,no3:0,po4:0,org:0,bact:0,algae:0,kh:0,gh:0};
+
+    // Fish respiration & waste (temperature-scaled via Q10 rule)
+    G.fish.forEach(function(f) {
+      if (!f.alive) return;
+      var it = AQUA.ITEMS[f.key]||{};
+      var tf = Math.pow(2,(c.temp-76)/10);
+      d.o2  -= (it.o2c ||0)*f.mass*tf;
+      d.co2 += (it.co2p||0)*f.mass*tf;
+      d.nh3 += (it.nh3p||0)*f.mass*tf*(fed?1.8:1);
+      d.org += (it.wp  ||0)*f.mass*(fed?1:0.3);
+      d.po4 += (it.po4p||0)*f.mass*tf*(fed?1.1:0.35);
+    });
+
+    // Nitrification (Nitrosomonas NH3→NO2, Nitrobacter NO2→NO3)
+    var bactMult = AQUA.FX.hasFlag(G,'hasFilter')||AQUA.FX.hasFlag(G,'hasHOB') ? 1.6 : 1;
+    var bact = c.bact * bactMult * surfFactor;
+    var n1 = bact*0.25*(c.nh3/(c.nh3+0.3));
+    var n2 = bact*0.20*(c.no2/(c.no2+0.2));
+    d.nh3 -= n1; d.no2 += n1-n2; d.no3 += n2;
+
+    // Decomposition
+    var decomp = c.org*0.15;
+    G.cleaners.forEach(function(cl){ decomp += ((AQUA.ITEMS[cl.key]||{}).oc||0)*(cl.mass||1); });
+    d.nh3 += decomp*0.4; d.org -= decomp;
+
+    // Plant photosynthesis & nutrient uptake
+    // PORT NOTE: pure data calculation. eff and co2Boost are scalars the
+    // renderer can read from a PlantActivityComponent if needed for visual cues.
+    G.plants.forEach(function(p) {
+      if (p.type!=='plant'||!p.key) return;
+      var it = AQUA.ITEMS[p.key]||{};
+      if (lightLevel < (it.lightNeeded||0.2)) return;
+      // Base efficiency: light quality × NO3 availability (Liebig minimum)
+      var no3Factor = Math.min(1, c.no3 / 10);  // saturates at 10 ppm NO3
+      var eff = lightLevel * no3Factor;
+      if (eff <= 0.05) return;
+      // CO2 multiplier: more CO2 = faster photosynthesis (up to 2x at 20ppm).
+      // Floor of 0.3 means plants still work at low CO2, just slower.
+      // This makes CO2 injector a meaningful upgrade, not a requirement.
+      var co2Boost = Math.max(0.3, Math.min(2.0, c.co2 / 8));
+      var activity = eff * co2Boost;
+      d.o2  += (it.o2p ||0)*p.mass*activity;
+      d.co2 -= (it.co2c||0)*p.mass*activity;
+      d.no3 -= (it.no3c||0)*p.mass*eff;       // NO3 uptake follows base eff only
+      d.po4 -= (it.po4c||0)*p.mass*eff;
+      d.nh3 -= (it.nh3c||0)*p.mass*eff;
+    });
+
+    // Equipment perTick effects
+    // PORT NOTE: lightSchedule flags are pure state — renderer checks same flags
+    // to decide whether to draw the light bar sprite at night.
+    G.equip.forEach(function(k){
+      var it = AQUA.ITEMS[k];
+      if (!it) return;
+      // Suppress CO2 injector if timer says off at night
+      if (k === 'co2_injector' && !co2HardwareOn) return;
+      // Suppress light perTick (already handled via lightLevel above)
+      if (k === 'light' && !lightHardwareOn) return;
+      AQUA.FX.applyPerTick(it.perTick, d);
+    });
+
+    // Algae (Liebig minimum law)
+    var ag = G.algae||0;
+    var nf = Math.min(1,c.no3/25)*Math.min(1,c.po4/1.2);
+    d.algae = 0.09*nf*(lightLevel*0.25+0.08)*(ag>8?0.6:1);
+
+    // Gas exchange at surface
+    // O2: pulls toward 9 ppm saturation
+    d.o2 += (9 - c.o2) * 0.05;
+    // CO2: pulls toward atmospheric equilibrium (~0.5 ppm dissolved).
+    // Bubbler/HOB accelerates CO2 outgassing significantly (surface agitation).
+    // Without agitation, outgassing is slow — CO2 can still build up.
+    // PORT NOTE: pure data calculation, no renderer dependency.
+    var surfAgitation = (AQUA.FX.hasFlag(G,'hasFilter') || AQUA.FX.hasFlag(G,'hasHOB')) ? 0.08
+                      : AQUA.FX.hasFlag(G,'hasBubbler') ? 0.12
+                      : 0.02;
+    // Also scale by tank surface area ratio (larger surf = more gas exchange)
+    var surfScale = Math.min(2.0, (totalSurf + G.surf) / 200);
+    d.co2 -= (c.co2 - 0.5) * surfAgitation * surfScale;
+
+    // KH buffering: CO2 slowly consumes carbonate hardness
+    // KH = 0 causes pH instability (acid crash handled in tick())
+    d.kh = -Math.max(0, c.co2 - 3) * 0.003;
+    // GH is stable unless remineralizer used; small natural decline
+    d.gh = -0.005;
+
+    return Object.assign({},d,{totalSurf:totalSurf});
+  },
+
+  redoxScore: function(G) {
+    var c = G.chem;
+    return Math.max(0,Math.min(1,
+      (c.o2/9)*0.6+(1-Math.min(1,c.org/2))*0.3+(1-Math.min(1,c.nh3/0.5))*0.1));
+  },
+
+  tick: function(G, fed) {
+    var S = AQUA.SIM._clone(G);
+    var events = [];
+    var c = S.chem;
+
+    if (!fed) S.fish.forEach(function(f){ if(f.alive)f.stress=Math.min(100,(f.stress||0)+8); });
+
+    var delta = AQUA.SIM.calcDeltas(c, fed, S, S.timeOfDay || 'day');
+
+    c.o2  = Math.min(10,Math.max(0,   c.o2  +delta.o2));
+    c.co2 = Math.max(0.5,             c.co2 +delta.co2);
+    c.nh3 = Math.max(0,               c.nh3 +delta.nh3);
+    c.no2 = Math.max(0,               c.no2 +delta.no2);
+    c.no3 = Math.max(0,               c.no3 +delta.no3);
+    c.po4 = Math.max(0,               c.po4 +delta.po4);
+    c.org = Math.max(0,               c.org +delta.org);
+    c.bact= Math.min(1,Math.max(0,    c.bact+delta.bact));
+
+    // Apply KH/GH
+    c.kh = Math.max(0, (c.kh != null ? c.kh : 4) + delta.kh);
+    c.gh = Math.max(0, (c.gh != null ? c.gh : 8) + delta.gh);
+
+    // KH buffers pH: strong buffer at high KH, weak at low KH
+    var khBuffer = Math.min(1, (c.kh != null ? c.kh : 4) / 4);
+    var tpH = 8.3 - Math.log10(Math.max(0.1,c.co2)*0.5)*0.8;
+    // Low KH = pH driven more aggressively toward CO2 equilibrium (less buffered)
+    var phSpeed = 0.08 + (1 - khBuffer) * 0.12;
+    c.ph = Math.max(5, Math.min(9.5, c.ph + (tpH - c.ph) * phSpeed));
+
+    // Acid crash: KH=0 → pH collapses fast
+    if (c.kh <= 0) {
+      c.ph = Math.max(5, c.ph - 0.4);
+      events.push({type:'chem_warn', param:'KH', value:0, severe:true, msg:'KH depleted! pH crashing — add Crushed Coral!'});
+    } else if (c.kh < 1) {
+      events.push({type:'chem_warn', param:'KH', value:c.kh, severe:false, msg:'KH critically low — pH unstable!'});
+    }
+
+    var _isNight = (S.timeOfDay === 'night');
+    var _sched = S.lightSchedule || {};
+    var _lightOn = AQUA.FX.hasFlag(S,'hasLight') && !(_isNight && _sched.lightOff);
+    var lightLevel = _lightOn ? 1.0 : (_isNight ? 0.0 : 0.15);
+    S.plants.forEach(function(p) {
+      if (p.type!=='plant') return;
+      var it = AQUA.ITEMS[p.key]||{};
+      var no3Factor  = Math.min(1, c.no3 / 10);
+      var eff        = lightLevel * no3Factor;
+      var co2Boost   = Math.max(0.3, Math.min(2.0, c.co2 / 8));
+      var growthRate = eff * co2Boost;
+      if (growthRate > 0.05) p.mass = (p.mass||1) + (it.growRate||0.035) * growthRate * (p.mass||1);
+    });
+
+    if (typeof S.algae==='undefined') S.algae=0;
+    S.algae += delta.algae||0;
+    var eat=0;
+    S.cleaners.forEach(function(cl){ if(cl.alive)eat+=((AQUA.ITEMS[cl.key]||{}).oc||0)*(cl.mass||1)*1.5; });
+    S.algae = Math.max(0,S.algae-eat*0.35);
+
+    // Health checks
+    S.fish.forEach(function(f) {
+      if (!f.alive) return;
+      var it = AQUA.ITEMS[f.key]||{};
+      var si=0;
+      if (c.nh3>(it.nh3l||0.5)*0.6)  si+=(c.nh3/(it.nh3l||0.5))*20;
+      if (c.no2>(it.no2l||1.0)*0.6)  si+=(c.no2/(it.no2l||1.0))*15;
+      if (c.o2 <(it.o2min||4.0)*1.2) si+=(((it.o2min||4)-c.o2)/(it.o2min||4))*30;
+      if (c.ph <(it.phmin||6.5)||c.ph>(it.phmax||8)) si+=10;
+      // Schooling stress: penalize if schooling fish is alone
+      if (it.schooling) {
+        var sameSpecies = S.fish.filter(function(x){return x.alive&&x.key===f.key;}).length;
+        if (sameSpecies < 3) si += (3-sameSpecies)*4;
+      }
+      // GH stress for species with hard-water preference
+      if (it.ghmin && c.gh < it.ghmin) si += (it.ghmin - c.gh) * 3;
+      if (it.ghmax && c.gh > it.ghmax) si += (c.gh - it.ghmax) * 2;
+
+      f.stress = Math.min(100,Math.max(0,(f.stress||0)+si-5));
+      f.health = Math.max(0,(f.health||100)-f.stress*0.02);
+
+      // ── Disease progression ──────────────────────────────
+      if (!f.disease) {
+        // Infection rolls: Ich (temp sensitive), Fin Rot (NH3/NO2), Velvet (low O2 + stress)
+        var ichRoll    = (c.temp > 80 ? 0.015 : 0.005) * (1 - (f.genes ? f.genes.diseaseResist : 0.3));
+        var finRotRoll = Math.min(0.05, (c.nh3 * 0.04 + c.no2 * 0.02)) * (1 - (f.genes ? f.genes.diseaseResist : 0.3));
+        var velvetRoll = (c.o2 < 5 ? 0.012 : 0.003) * (f.stress > 50 ? 2 : 1) * (1 - (f.genes ? f.genes.diseaseResist : 0.3));
+        // Check for sick tankmates (spread)
+        var sickCount = S.fish.filter(function(x){return x.alive && x.disease;}).length;
+        var spreadMult = 1 + sickCount * 0.3;
+        var r = Math.random();
+        if (r < ichRoll * spreadMult)    { f.disease = 'ich';     f.daysSick = 0; f.severity = 0.1; events.push({type:'disease_new', fishName:it.name||f.key, disease:'Ich'}); }
+        else if (r < finRotRoll * spreadMult) { f.disease = 'fin_rot'; f.daysSick = 0; f.severity = 0.1; events.push({type:'disease_new', fishName:it.name||f.key, disease:'Fin Rot'}); }
+        else if (r < velvetRoll * spreadMult) { f.disease = 'velvet';  f.daysSick = 0; f.severity = 0.1; events.push({type:'disease_new', fishName:it.name||f.key, disease:'Velvet'}); }
+      } else {
+        // Disease progression
+        f.daysSick = (f.daysSick||0) + 1;
+        var sev = f.severity || 0.1;
+        if (f.disease === 'ich')     { sev += 0.06; si += sev * 12; }
+        if (f.disease === 'fin_rot') { sev += 0.04; si += sev * 8;  }
+        if (f.disease === 'velvet')  { sev += 0.08; si += sev * 18; }
+        f.severity = Math.min(1, sev);
+        if (f.severity > 0.5) events.push({type:'disease_warn', fishName:it.name||f.key, disease:f.disease, severity:f.severity});
+      }
+
+      if (f.health<=0&&f.alive) {
+        f.alive=false; f.daysDeadAt = S.day;
+        events.push({type:'fish_died',fishKey:f.key,name:it.name||f.key,cause:f.disease||'water_quality'});
+      }
+    });
+
+    // ── Active treatment countdown ────────────────────────
+    if (!S.activeTreatments) S.activeTreatments = [];
+    S.activeTreatments = S.activeTreatments.filter(function(t){
+      t.daysLeft--;
+      if (t.tempBoost && t.daysLeft <= 0) { S.chem.temp = Math.max(76, S.chem.temp - t.tempBoost); }
+      return t.daysLeft > 0;
+    });
+
+    if (S.algae>4) {
+      S.fish.forEach(function(f){if(f.alive)f.stress=Math.min(100,(f.stress||0)+9);});
+      events.push({type:'algae_stress'});
+    }
+
+    // T1-E: Throttle repeated events — 3-day cooldown per type prevents log spam
+    if (!S.lastEventDay) S.lastEventDay = {};
+    function pushThrottled(key, obj, cd) {
+      if (S.day - (S.lastEventDay[key]||0) >= (cd||3)) { S.lastEventDay[key]=S.day; events.push(obj); }
+    }
+    if (c.kh < 2 && c.kh > 0) pushThrottled('KH',  {type:'chem_warn',param:'KH',value:c.kh,severe:c.kh<1}, 2);
+    if (c.gh < 3)              pushThrottled('GH',  {type:'chem_warn',param:'GH',value:c.gh,severe:c.gh<1}, 2);
+    if (c.nh3>0.2)             pushThrottled('NH3', {type:'chem_warn',param:'NH3',value:c.nh3,severe:c.nh3>0.4}, 3);
+    if (c.no2>0.3)             pushThrottled('NO2', {type:'chem_warn',param:'NO2',value:c.no2,severe:c.no2>0.8}, 3);
+    if (c.no3>20)              pushThrottled('NO3', {type:'chem_info',param:'NO3',msg:'NO3 rising — buy plants!'}, 5);
+    if (c.po4>0.7)             pushThrottled('PO4', {type:'chem_warn',param:'PO4',value:c.po4,severe:c.po4>1.4}, 3);
+    if (c.o2<4)                pushThrottled('O2',  {type:'chem_warn',param:'O2',value:c.o2,severe:true}, 2);
+    if (S.algae>1.8)           pushThrottled('algae_bloom', {type:'algae_bloom'}, 4);
+
+    var alive = S.fish.filter(function(f){return f.alive;}).length;
+    if (alive===0) {
+      events.push({type:'game_over',won:false});
+    } else {
+      if (S.day>=30&&S.phase==='survive'){S.phase='grow_plant';events.push({type:'phase_change',phase:'grow_plant'});}
+      var jf=S.plants.find(function(p){return p.key==='javafern';});
+      if (jf&&jf.mass>=4.5&&S.phase==='grow_plant'){S.phase='sell_plant';events.push({type:'phase_change',phase:'sell_plant'});}
+    }
+
+    // Record history before incrementing day
+    AQUA.CHEM_HISTORY.record(S);
+
+    // T1-C: Cycling milestone log messages
+    if (S.day < 30) {
+      var prevBact = S._prevBact || 0;
+      if (prevBact < 0.1 && c.bact >= 0.1) events.push({type:'log', msg:'🔬 Nitrosomonas colonizing! First NH3 spike expected soon.', ltype:'warn'});
+      if (prevBact < 0.2 && c.bact >= 0.2) events.push({type:'log', msg:'🔬 Bacteria colony growing — NO2 may spike next. Hold tight!', ltype:'warn'});
+      if (prevBact < 0.3 && c.bact >= 0.3) events.push({type:'log', msg:'🔬 Nitrobacter establishing — NO2 should start falling.', ltype:'ok'});
+      if (prevBact < 0.4 && c.bact >= 0.4) events.push({type:'log', msg:'✅ TANK CYCLED! Bacteria colony stable. Safe to add more fish.', ltype:'ok'});
+    }
+    S._prevBact = c.bact;
+
+    // T2-D: Dead fish cleanup — decompose after 3 days, release organic waste
+    S.fish = S.fish.filter(function(f){
+      if (f.alive) return true;
+      var daysGone = S.day - (f.daysDeadAt||S.day);
+      if (daysGone >= 3) {
+        c.org = Math.min(3, c.org + 0.25 * ((AQUA.ITEMS[f.key]||{}).mass||2) / 5);
+        events.push({type:'log', msg:'🪦 '+(((AQUA.ITEMS||{})[f.key]||{}).name||f.key)+' decomposed — waste spike!', ltype:'warn'});
+        return false; // remove from array
+      }
+      return true;
+    });
+
+    S.day++; S.fed=false;
+    return {newState:S, events:events, delta:delta};
+  },
+
+  // ── Night simulation ────────────────────────────────────────────────────
+  // Pure function. Runs N_NIGHT_TICKS sub-ticks with timeOfDay='night'.
+  // Returns {newState, events[], diurnalLog[]}.
+  // diurnalLog is 24 slots representing hourly O2/CO2/pH across the full day:
+  //   slots 0-17  = day hours (interpolated from daytime chem history)
+  //   slots 18-23 = night hours (computed here from sub-ticks)
+  // PORT NOTE: pure fn, no DOM. diurnalLog stored in G — same struct in Unreal.
+  N_NIGHT_TICKS: 6,
+
+  nightTicks: function(G) {
+    var S = AQUA.SIM._clone(G);
+    S.timeOfDay = 'night';
+    var events = [];
+    var log = [];
+
+    // Seed daytime portion of diurnalLog from today's chemHistory last entry
+    // (18 slots = hours 06:00-23:00, representing the day just ended)
+    var daySnap = (S.chemHistory && S.chemHistory.length > 0)
+      ? S.chemHistory[S.chemHistory.length - 1]
+      : S.chem;
+    for (var h = 0; h < 18; h++) {
+      // Gentle sine curve over the day: O2 peaks at h=8 (midday), CO2 troughs
+      var dayCurve = Math.sin(Math.PI * h / 17);  // 0→1→0 across day
+      log.push({
+        hour: h + 6,  // 06:00 to 23:00
+        o2:   (daySnap.o2  || 8) * (0.88 + dayCurve * 0.12),
+        co2:  (daySnap.co2 || 3) * (1.12 - dayCurve * 0.12),
+        ph:   daySnap.ph || 7.0,
+        isNight: false
+      });
+    }
+
+    // Run 6 night sub-ticks (each = ~1 night hour, 00:00-05:00)
+    var c = S.chem;
+    var nightEvents = [];
+    var minO2 = c.o2;
+
+    for (var tick = 0; tick < AQUA.SIM.N_NIGHT_TICKS; tick++) {
+      var delta = AQUA.SIM.calcDeltas(c, false, S, 'night');
+
+      // Apply chem deltas (same as day tick, just without feeding)
+      c.o2   = Math.min(10, Math.max(0,    c.o2   + delta.o2));
+      c.co2  = Math.max(0.5,               c.co2  + delta.co2);
+      c.nh3  = Math.max(0,                 c.nh3  + delta.nh3);
+      c.no2  = Math.max(0,                 c.no2  + delta.no2);
+      c.no3  = Math.max(0,                 c.no3  + delta.no3);
+      c.po4  = Math.max(0,                 c.po4  + delta.po4);
+      c.org  = Math.max(0,                 c.org  + delta.org);
+      c.bact = Math.min(1, Math.max(0,     c.bact + delta.bact));
+      c.kh   = Math.max(0, (c.kh != null ? c.kh : 4) + delta.kh);
+      c.gh   = Math.max(0, (c.gh != null ? c.gh : 8) + delta.gh);
+
+      // pH: at night (no photosynthesis) CO2 builds up → pH drifts down
+      var khBuffer = Math.min(1, (c.kh != null ? c.kh : 4) / 4);
+      var tpH = 8.3 - Math.log10(Math.max(0.1, c.co2) * 0.5) * 0.8;
+      c.ph = Math.max(5, Math.min(9.5, c.ph + (tpH - c.ph) * (0.08 + (1 - khBuffer) * 0.12)));
+
+      // KH acid crash at night
+      if (c.kh <= 0) {
+        c.ph = Math.max(5, c.ph - 0.4);
+        nightEvents.push({type:'chem_warn', param:'KH', value:0, severe:true, msg:'KH crashed overnight! pH collapsed.'});
+      }
+
+      // Track O2 nadir
+      minO2 = Math.min(minO2, c.o2);
+
+      log.push({
+        hour: 24 + tick,  // 00:00-05:00 = slots 24-29 mapped to 0-5
+        o2:   c.o2,
+        co2:  c.co2,
+        ph:   c.ph,
+        isNight: true
+      });
+    }
+
+    // Fix hour labels: night hours are 00:00-05:59
+    for (var i = 18; i < log.length; i++) log[i].hour = i - 18;  // 0..5
+
+    // Night stress on fish
+    S.fish.forEach(function(f) {
+      if (!f.alive) return;
+      var it = AQUA.ITEMS[f.key] || {};
+      // O2 crash stress proportional to how far below safe O2 min it got
+      if (minO2 < (it.o2min || 4)) {
+        var o2stress = Math.round(((it.o2min || 4) - minO2) / (it.o2min || 4) * 40);
+        f.stress = Math.min(100, (f.stress || 0) + o2stress);
+        if (o2stress > 20) nightEvents.push({type:'night_o2_crash', fishName: it.name || f.key, minO2: minO2.toFixed(2)});
+      }
+      // CO2 poisoning at night if injector left on
+      if (c.co2 > 20) {
+        var co2stress = Math.round((c.co2 - 20) * 3);
+        f.stress = Math.min(100, (f.stress || 0) + co2stress);
+        if (co2stress > 15 && !nightEvents.find(function(e){return e.type==='night_co2';}))
+          nightEvents.push({type:'night_co2', co2: c.co2.toFixed(1)});
+      }
+      // pH crash stress
+      if (c.ph < 6.0) {
+        f.stress = Math.min(100, (f.stress || 0) + 15);
+      }
+      // Nocturnal fish recover some stress at night
+      if ((it.behaviors || []).indexOf('nocturnal') >= 0) {
+        f.stress = Math.max(0, (f.stress || 0) - 10);
+      }
+      // Update health from accumulated stress
+      f.health = Math.max(0, (f.health || 100) - f.stress * 0.015);
+      if (f.health <= 0 && f.alive) {
+        f.alive = false; f.daysDeadAt = S.day;
+        nightEvents.push({type:'fish_died', fishKey: f.key, name: it.name || f.key, cause:'night_stress'});
+      }
+    });
+
+    // Morning: reset to day
+    S.timeOfDay = 'day';
+    S.diurnalLog = log;
+
+    // Summary of key overnight changes (used by UI night overlay)
+    var summary = {
+      o2Change:   parseFloat((c.o2  - G.chem.o2).toFixed(2)),
+      co2Change:  parseFloat((c.co2 - G.chem.co2).toFixed(2)),
+      phChange:   parseFloat((c.ph  - G.chem.ph).toFixed(2)),
+      nh3Change:  parseFloat((c.nh3 - G.chem.nh3).toFixed(2)),
+      minO2:      parseFloat(minO2.toFixed(2)),
+      morningO2:  parseFloat(c.o2.toFixed(2)),
+      morningCO2: parseFloat(c.co2.toFixed(2)),
+      morningPH:  parseFloat(c.ph.toFixed(2)),
+      khDepleted: c.kh < 0.5,
+      co2Danger:  c.co2 > 20
+    };
+
+    return {newState: S, events: nightEvents, summary: summary};
+  }
+};
+
+// ============================================================
+// STATE
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §STATE  —  AQUA.G state, initState, makeFish, save/load, AQUA.actions
+// Search handle: §STATE
+// ════════════════════════════════════════════════════════════════
+
+// ============================================================
+
+AQUA.G = null;
+AQUA.SAVE_VERSION = 5;
+AQUA.WATER_CHANGE_COST = 5;
+AQUA.DAILY_INCOME = 3;
+
+AQUA.initState = function() {
+  AQUA.G = {
+    version:AQUA.SAVE_VERSION,
+    day:1, fed:false, money:50, phase:'survive', over:false,
+    timeOfDay:'day', lightSchedule:{lightOff:true,co2Off:true}, diurnalLog:[],
+    surf:45, tempStable:false,
+    chem:{ph:7.0,nh3:0,no2:0,no3:0,o2:8.5,co2:3.0,temp:76,org:0,bact:0.1,po4:0,kh:4.0,gh:8.0},
+    fish:[], cleaners:[], plants:[], equip:[], bubbles:[], algae:0, chemHistory:[], activeTreatments:[],
+    lastEventDay:{}
+  };
+  AQUA.G.fish.push(AQUA.makeFish('goldfish',160,130));
+  AQUA.G.plants.push({type:'fakeplant',x:110,y:0,color:'#ff44cc'});
+  AQUA.G.plants.push({type:'fakeplant',x:400,y:0,color:'#ff88ee'});
+};
+
+AQUA.makeFish = function(key, x, y) {
+  var d = AQUA.ITEMS[key]||{};
+  return {
+    key:key, alive:true, health:100, stress:0,
+    mass:(d.mass||2)*(d.mass ? 1 : 1),
+    x:x||160, y:y||130,
+    vx:(Math.random()-.5)*1.4, vy:(Math.random()-.5)*0.5, dir:1,
+    genes: AQUA.GENETICS.randomGenes(key),  // ← genetics scaffold
+    age:0                                    // ← age in days (for future breeding)
+  };
+};
+
+AQUA.makeCleaner = function(key, x) {
+  var d = AQUA.ITEMS[key]||{};
+  return {
+    key:key, alive:true, health:100, mass:d.mass||1,
+    x:x||200, y:0,
+    genes: AQUA.GENETICS.randomGenes(key),  // ← shrimp will use color genes
+    age:0
+  };
+};
+
+AQUA.save = function() { if(AQUA.G)localStorage.setItem('aquaSimSave',JSON.stringify(AQUA.G)); };
+AQUA.load = function() {
+  try {
+    var s=localStorage.getItem('aquaSimSave'); if(!s)return false;
+    var p=JSON.parse(s);
+    if(!p.version||p.version<AQUA.SAVE_VERSION){
+      localStorage.removeItem('aquaSimSave');
+      AQUA.BUS.emit('log',{msg:'Old save discarded (schema v'+AQUA.SAVE_VERSION+'). Fresh start!',type:'warn'});
+      return false;
+    }
+    AQUA.G=p; return true;
+  } catch(e){ return false; }
+};
+
+// ============================================================
+// ACTIONS
+// ============================================================
+AQUA.actions = {
+  feed: function() {
+    var G=AQUA.G; if(G.over)return;
+    if(G.fed){G.chem.org+=0.6;AQUA.BUS.emit('log',{msg:'Already fed! Excess food decays.',type:'danger'});return;}
+    G.fed=true;
+    G.chem.org+=G.fish.filter(function(f){return f.alive;}).length*0.05;
+    AQUA.BUS.emit('log',{msg:'Fish fed!',type:'ok'});
+    AQUA.BUS.emit('status_changed');
+  },
+  waterChange: function() {
+    var G=AQUA.G; if(G.over)return;
+    if(G.money<AQUA.WATER_CHANGE_COST){AQUA.BUS.emit('log',{msg:'Not enough money!',type:'danger'});return;}
+    G.money-=AQUA.WATER_CHANGE_COST;
+    ['nh3','no2','no3','org','po4'].forEach(function(k){G.chem[k]*=0.7;});
+    G.chem.ph=G.chem.ph*0.7+7.2*0.3;
+    AQUA.BUS.emit('log',{msg:'30% water change performed.',type:'ok'});
+    AQUA.BUS.emit('status_changed');
+  },
+  // END DAY: runs the day tick, then triggers the night sequence.
+  // The night sequence is async UI (AQUA.NIGHT.begin) — pure sim runs first.
+  // PORT NOTE: on Unreal, replace AQUA.NIGHT.begin with a Blueprint timeline
+  // that reads the summary struct and animates the night overlay widget.
+  endDay: function() {
+    var G = AQUA.G; if(G.over) return;
+    // Lock UI during night
+    AQUA.NIGHT.lockButtons(true);
+    // Scale income by tank success
+    var aliveCount = G.fish.filter(function(f){return f.alive;}).length;
+    var incomeBonus = Math.floor(aliveCount * 0.5);
+    G.money += AQUA.DAILY_INCOME + incomeBonus;
+    // Update achievement trackers (pure state)
+    AQUA.ACHIEVEMENTS.updateTrackers(G);
+    // Run the daytime tick
+    var dayResult = AQUA.SIM.tick(G, G.fed);
+    AQUA.G = dayResult.newState;
+    AQUA.G.bubbles = G.bubbles || [];
+    // Roll random event
+    var evDef = AQUA.EVENTS.roll(AQUA.G);
+    // Update tank rating
+    AQUA.ACHIEVEMENTS.updateRating(AQUA.G);
+    // Check achievements
+    var newAchievements = AQUA.ACHIEVEMENTS.checkAll(AQUA.G);
+    // Run the night sub-ticks
+    var nightResult = AQUA.SIM.nightTicks(AQUA.G);
+    AQUA.G = nightResult.newState;
+    AQUA.G.bubbles = [];
+    // Track safe nights for achievement
+    if (nightResult.summary.minO2 >= 4) AQUA.G._safeNights = (AQUA.G._safeNights||0)+1;
+    // Collect all sim events
+    var allEvents = dayResult.events.concat(nightResult.events);
+    // Show night overlay, then on completion fire events and unlock
+    AQUA.NIGHT.begin(nightResult.summary, function() {
+      allEvents.forEach(function(ev){ AQUA.BUS.emit(ev.type, ev); });
+      // Apply random event
+      if (evDef) AQUA.EVENTS.applyEvent(evDef, AQUA.G);
+      // Announce new achievements
+      newAchievements.forEach(function(ach) {
+        AQUA.BUS.emit('log', {msg:ach.icon+' ACHIEVEMENT UNLOCKED: '+ach.name+' — '+ach.desc, type:'ok'});
+        AQUA.ui.showAchievementToast(ach);
+      });
+      var incomeMsg = 'Morning — Day '+AQUA.G.day+'. +$'+(AQUA.DAILY_INCOME+incomeBonus);
+      if (incomeBonus > 0) incomeMsg += ' (fish bonus +$'+incomeBonus+')';
+      AQUA.BUS.emit('log', {msg:incomeMsg, type:'info'});
+      AQUA.BUS.emit('status_changed');
+      AQUA.NIGHT.lockButtons(false);
+      AQUA.save();
+    });
+  },
+  // Legacy alias used internally and by store close
+  advanceDay: function() { AQUA.actions.endDay(); },
+  setTimer: function(key, val) {
+    if (!AQUA.G.lightSchedule) AQUA.G.lightSchedule = {};
+    AQUA.G.lightSchedule[key] = val;
+    var label = key === 'lightOff' ? 'Light' : 'CO2';
+    AQUA.BUS.emit('log', {msg: label+' night timer '+(val?'ON (will shut off at night)':'OFF (runs all night)'), type:'info'});
+  },
+
+  sellPlant: function(plantObj) {
+    var G=AQUA.G;
+    var price=Math.round(plantObj.mass*2);
+    G.money+=price;
+    var idx=G.plants.indexOf(plantObj);
+    if(idx>=0)G.plants.splice(idx,1);
+    AQUA.BUS.emit('log',{msg:'Sold '+((AQUA.ITEMS[plantObj.key]||{}).name||'Plant')+' for $'+price+'!',type:'ok'});
+    if(G.phase==='sell_plant'){G.over=true;AQUA.BUS.emit('game_over',{won:true});}
+    AQUA.BUS.emit('status_changed');
+    AQUA.shop.build();
+  }
+};
+
+// ============================================================
+// AQUA.PANELS — Tabbed UI controller
+// PORT NOTE: each panel maps to a separate UMG widget in Unreal.
+// panels.show(idx) = set widget visibility. drawCharts() = a custom
+// widget using UCanvas or a DataViz plugin. Everything reads from
+// AQUA.G and AQUA.G.chemHistory — same data on both sides.
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §COMPAT  —  AQUA.COMPAT — Fish compatibility checker (pure)
+// Search handle: §COMPAT
+// ════════════════════════════════════════════════════════════════
+
+// ============================================================
+
+AQUA.COMPAT = {
+  // Returns array of warning objects {level:'warn'|'danger', msg:string}
+  check: function(buyKey, G) {
+    var newIt = AQUA.ITEMS[buyKey] || {};
+    var warnings = [];
+    var aliveFish = G.fish.filter(function(f){ return f.alive; });
+    var c = G.chem;
+
+    // ── Temp range overlap ───────────────────────────────────
+    aliveFish.forEach(function(f) {
+      var it = AQUA.ITEMS[f.key] || {};
+      var newMin = newIt.tempMin || 70, newMax = newIt.tempMax || 82;
+      var exMin  = it.tempMin   || 70, exMax  = it.tempMax   || 82;
+      var overlap = Math.min(newMax, exMax) - Math.max(newMin, exMin);
+      if (overlap < 4) {
+        warnings.push({level:'danger', msg: newIt.name+' ('+newMin+'-'+newMax+'°F) poorly overlaps '+it.name+' ('+exMin+'-'+exMax+'°F)'});
+      }
+    });
+
+    // ── pH range overlap ─────────────────────────────────────
+    aliveFish.forEach(function(f) {
+      var it = AQUA.ITEMS[f.key] || {};
+      if (!newIt.phmin || !it.phmin) return;
+      var overlap = Math.min(newIt.phmax||8, it.phmax||8) - Math.max(newIt.phmin||6.5, it.phmin||6.5);
+      if (overlap < 0.3) {
+        warnings.push({level:'warn', msg: newIt.name+' pH ('+newIt.phmin+'-'+newIt.phmax+') barely overlaps '+it.name+' pH ('+it.phmin+'-'+it.phmax+')'});
+      }
+    });
+
+    // ── Aggression / predation ───────────────────────────────
+    var newAggr = newIt.aggression || 0;
+    aliveFish.forEach(function(f) {
+      var it = AQUA.ITEMS[f.key] || {};
+      var exAggr = it.aggression || 0;
+      // New fish is aggressive toward existing peaceful fish
+      if (newAggr > 0.5 && (it.schooling || exAggr < 0.2)) {
+        warnings.push({level:'danger', msg: newIt.name+' (aggression '+Math.round(newAggr*100)+'%) may attack '+it.name});
+      }
+      // Existing aggressive fish may attack new fish
+      if (exAggr > 0.5 && (newIt.schooling || newAggr < 0.2)) {
+        warnings.push({level:'warn', msg: 'Your '+it.name+' may bully new '+newIt.name});
+      }
+      // Betta-specific: multiple bettas
+      if (buyKey === 'betta' && f.key === 'betta') {
+        warnings.push({level:'danger', msg: 'Two male bettas will fight! Fatal for one.'});
+      }
+      // Large fish + tiny fish (size predation)
+      if ((newIt.mass||2) > 6 && (it.mass||2) < 2) {
+        warnings.push({level:'warn', msg: newIt.name+' may eat tiny '+it.name});
+      }
+      if ((it.mass||2) > 6 && (newIt.mass||2) < 2) {
+        warnings.push({level:'warn', msg: 'Existing '+it.name+' may eat tiny '+newIt.name});
+      }
+    });
+
+    // ── Schooling warning ─────────────────────────────────────
+    if (newIt.schooling) {
+      var sameCount = G.fish.filter(function(f){ return f.alive && f.key === buyKey; }).length;
+      if (sameCount === 0) {
+        warnings.push({level:'warn', msg: newIt.name+' is a schooling fish — buy at least 3 to avoid stress'});
+      } else if (sameCount < 3) {
+        warnings.push({level:'warn', msg: 'You have '+(sameCount+1)+' '+newIt.name+' — need 3+ for low stress'});
+      }
+    }
+
+    // ── Current water chemistry suitability ──────────────────
+    if (newIt.phmin && (c.ph < newIt.phmin || c.ph > (newIt.phmax||8))) {
+      warnings.push({level:'warn', msg: 'Current pH '+c.ph.toFixed(1)+' is outside '+newIt.name+' safe range ('+newIt.phmin+'-'+newIt.phmax+')'});
+    }
+    if (newIt.tempMin && (c.temp < newIt.tempMin || c.temp > (newIt.tempMax||82))) {
+      warnings.push({level:'danger', msg: 'Tank temp '+c.temp+'°F is outside '+newIt.name+' range ('+newIt.tempMin+'-'+newIt.tempMax+'°F)'});
+    }
+
+    // ── Copper warning for shrimp/snails ─────────────────────
+    if ((newIt.behaviors||[]).indexOf('shrimp') >= 0 || newIt.type === 'cleaner') {
+      if (G.activeTreatments && G.activeTreatments.some(function(t){ return t.disease === 'velvet'; })) {
+        warnings.push({level:'danger', msg: 'Copper treatment active — shrimp/snails will die immediately!'});
+      }
+    }
+
+    return warnings;
+  },
+
+  // Render warnings as HTML string
+  html: function(warnings) {
+    if (!warnings.length) return '<span style="color:#44ff88;font-size:9px">✓ No compatibility issues</span>';
+    return warnings.map(function(w) {
+      var col = w.level === 'danger' ? '#ff4444' : '#ffaa44';
+      var icon = w.level === 'danger' ? '⚠ ' : '! ';
+      return '<div style="color:'+col+';font-size:9px;margin-top:2px">'+icon+w.msg+'</div>';
+    }).join('');
+  }
+};
+
+// ============================================================
+// AQUA.EVENTS — Random event engine
+// PORT NOTE: pure data. randomEvent() returns an event descriptor.
+// applyEvent() mutates state. UI layer (showEventCard) is the only
+// DOM-touching part — replace with Blueprint dialog on Unreal port.
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §EVENTS  —  AQUA.EVENTS — Random event engine and catalog
+// Search handle: §EVENTS
+// ════════════════════════════════════════════════════════════════
+
+// PORT NOTE: roll() and applyEvent() are pure — translate to C++ directly.
+// showEventCard() is the only DOM part; replace with Unreal UMG dialog.
+// ============================================================
+
+AQUA.EVENTS = {
+  // Event catalog — pure data, no DOM
+  // weight: base probability weight (higher = more common)
+  // minDay: earliest day this can fire
+  // condition(G): optional extra check
+  // apply(G): mutates state, returns {msg, detail, cost}
+  CATALOG: [
+    {
+      id: 'power_outage',
+      name: 'Power Outage!',
+      icon: '⚡',
+      weight: 8,
+      minDay: 5,
+      condition: function(G) { return G.equip.length > 0; },
+      apply: function(G) {
+        // Filter off for 1 day: bacteria die-off, O2 drops
+        var days = 1 + Math.floor(Math.random()*2);
+        G.chem.bact = Math.max(0.05, G.chem.bact - 0.25);
+        G.chem.o2   = Math.max(1, G.chem.o2 - 2.5);
+        G.chem.nh3  = Math.min(2, G.chem.nh3 + 0.3);
+        G.fish.forEach(function(f){ if(f.alive) f.stress=Math.min(100,(f.stress||0)+20); });
+        return {msg:'Power was out for '+days+' hours!',
+                detail:'Filter stopped — O2 dropped, bacteria weakened, NH3 rising.',
+                cost:0, type:'danger'};
+      }
+    },
+    {
+      id: 'heatwave',
+      name: 'Heatwave',
+      icon: '🌡',
+      weight: 10,
+      minDay: 3,
+      condition: function(G) { return !G.equip.some(function(k){return k==='heater';}); },
+      apply: function(G) {
+        var rise = 4 + Math.floor(Math.random()*5);
+        G.chem.temp += rise;
+        G.chem.o2 = Math.max(2, G.chem.o2 - rise*0.25);
+        if (!G._heatwaveDays) G._heatwaveDays = 3;
+        return {msg:'Heatwave! Temp +'+rise+'°F for 3 days.',
+                detail:'O2 depletes faster in warm water. Heater would stabilize temp.',
+                cost:0, type:'warn'};
+      }
+    },
+    {
+      id: 'equipment_failure',
+      name: 'Equipment Failure',
+      icon: '🔧',
+      weight: 6,
+      minDay: 8,
+      condition: function(G) { return G.equip.length >= 2; },
+      apply: function(G) {
+        var repairCost = 8 + Math.floor(Math.random()*12);
+        var which = G.equip[Math.floor(Math.random()*G.equip.length)];
+        var name = (AQUA.ITEMS[which]||{}).name || which;
+        // Penalise as if equipment removed for a day
+        G.chem.o2  = Math.max(3, G.chem.o2 - 1.2);
+        G.chem.bact= Math.max(0.05, G.chem.bact - 0.1);
+        return {msg: name+' malfunctioned!',
+                detail: 'Running on reduced capacity today. Repair cost: $'+repairCost,
+                cost: repairCost, type:'warn'};
+      }
+    },
+    {
+      id: 'hitchhiker_snail',
+      name: 'Hitchhiker Snail!',
+      icon: '🐌',
+      weight: 15,
+      minDay: 4,
+      condition: function(G) { return G.plants.some(function(p){return p.type==='plant';}); },
+      apply: function(G) {
+        // Free nerite snail arrives — good!
+        G.cleaners.push(AQUA.makeCleaner('snail', 200+Math.random()*200));
+        return {msg: 'A snail hitched a ride on your plants!',
+                detail: 'A free Nerite Snail appeared. It will help with algae.',
+                cost: 0, type:'ok'};
+      }
+    },
+    {
+      id: 'bladder_snail_invasion',
+      name: 'Bladder Snail Invasion',
+      icon: '🐚',
+      weight: 7,
+      minDay: 6,
+      condition: function(G) { return G._bladderSnails > 0 || G.plants.some(function(p){return p.type==='plant';}); },
+      apply: function(G) {
+        if (!G._bladderSnails) G._bladderSnails = 0;
+        G._bladderSnails += 5 + Math.floor(Math.random()*8);
+        // Each bladder snail adds small bioload
+        G.chem.nh3 = Math.min(2, G.chem.nh3 + G._bladderSnails * 0.003);
+        G.chem.no3 = Math.min(80, G.chem.no3 + G._bladderSnails * 0.01);
+        return {msg: 'Bladder snail population: '+G._bladderSnails+'!',
+                detail: 'They multiply fast. Buy assassin snail or copper treatment to control.',
+                cost: 0, type:'warn'};
+      }
+    },
+    {
+      id: 'algae_fertilizer',
+      name: 'Algae Runoff',
+      icon: '🌿',
+      weight: 9,
+      minDay: 3,
+      condition: function(G) { return G.chem.no3 > 10; },
+      apply: function(G) {
+        G.algae = (G.algae||0) + 1.5 + Math.random()*1.5;
+        return {msg: 'Nitrate spike triggered an algae surge!',
+                detail: 'NO3='+G.chem.no3.toFixed(0)+'ppm — do a water change or add plants.',
+                cost: 0, type:'warn'};
+      }
+    },
+    {
+      id: 'water_gift',
+      name: 'Neighbour Gift',
+      icon: '💧',
+      weight: 12,
+      minDay: 2,
+      condition: function(G) { return true; },
+      apply: function(G) {
+        var gift = 5 + Math.floor(Math.random()*10);
+        G.money += gift;
+        return {msg: 'A neighbour admired your tank and tipped you $'+gift+'!',
+                detail: 'Keep that tank looking healthy for more tips.',
+                cost: -gift, type:'ok'};
+      }
+    },
+    {
+      id: 'mystery_fish_offer',
+      name: 'Mystery Fish in Store!',
+      icon: '✨',
+      weight: 5,
+      minDay: 7,
+      condition: function(G) { return !G._mysteryFishDay || G.day > G._mysteryFishDay + 7; },
+      apply: function(G) {
+        var rareKeys = ['rainbowfish','angelfish','hillstream_loach'];
+        var pick = rareKeys[Math.floor(Math.random()*rareKeys.length)];
+        var it = AQUA.ITEMS[pick] || {};
+        G._mysteryFishOffer = {key: pick, day: G.day};
+        G._mysteryFishDay   = G.day;
+        return {msg: 'Rare '+it.name+' available in store today only!',
+                detail: 'Check the FISH tab in the store. Offer expires at end of day.',
+                cost: 0, type:'ok'};
+      }
+    },
+    {
+      id: 'co2_fluctuation',
+      name: 'CO2 Spike',
+      icon: '💨',
+      weight: 6,
+      minDay: 5,
+      condition: function(G) { return G.equip.indexOf('co2_injector') >= 0; },
+      apply: function(G) {
+        G.chem.co2 = Math.min(30, G.chem.co2 + 4 + Math.random()*4);
+        G.chem.ph  = Math.max(5.5, G.chem.ph - 0.3);
+        G.fish.forEach(function(f){ if(f.alive) f.stress=Math.min(100,(f.stress||0)+12); });
+        return {msg: 'CO2 injector spiked overnight!',
+                detail: 'CO2 jumped to '+G.chem.co2.toFixed(1)+'ppm — pH dropped. Reduce injection or enable night timer.',
+                cost: 0, type:'danger'};
+      }
+    }
+  ],
+
+  // Roll for a random event. Returns event descriptor or null.
+  // PORT NOTE: pure function — same logic in C++. No DOM.
+  roll: function(G) {
+    if (G.over) return null;
+    if (G.day < 3) return null;  // grace period
+    // Base chance: 25% per day, increases with neglect
+    var neglect = (G.chem.nh3 > 0.3 ? 0.1 : 0) + (G.algae > 3 ? 0.05 : 0) + ((G.chem.o2 < 4) ? 0.1 : 0);
+    var baseChance = 0.25 + neglect;
+    if (Math.random() > baseChance) return null;
+    // Pick a weighted eligible event
+    var eligible = AQUA.EVENTS.CATALOG.filter(function(ev) {
+      return G.day >= ev.minDay && (!ev.condition || ev.condition(G));
+    });
+    if (!eligible.length) return null;
+    var totalW = eligible.reduce(function(s,ev){ return s+ev.weight; }, 0);
+    var r = Math.random() * totalW;
+    var acc = 0;
+    for (var i=0; i<eligible.length; i++) {
+      acc += eligible[i].weight;
+      if (r <= acc) return eligible[i];
+    }
+    return eligible[eligible.length-1];
+  },
+
+  // Apply event and show UI card
+  // PORT NOTE: applyEvent is pure. showEventCard is UI-only.
+  applyEvent: function(evDef, G) {
+    var result = evDef.apply(G);
+    if (result.cost > 0) G.money = Math.max(0, G.money - result.cost);
+    AQUA.EVENTS.showEventCard(evDef, result);
+    AQUA.BUS.emit('log', {msg: evDef.icon+' '+evDef.name+': '+result.msg, type: result.type});
+    return result;
+  },
+
+  // Inline event card (no position:fixed — in-flow above event log)
+  showEventCard: function(evDef, result) {
+    var card = document.getElementById('event-card');
+    if (!card) return;
+    var col = result.type==='danger'?'#ff4444':result.type==='ok'?'#44ff88':'#ffaa44';
+    var bg  = result.type==='danger'?'#1a0000':result.type==='ok'?'#001a00':'#1a0800';
+    card.style.display = 'block';
+    card.style.borderColor = col;
+    card.style.background  = bg;
+    card.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+        '<span style="color:'+col+';font-size:12px;letter-spacing:1px">'+evDef.icon+' '+evDef.name.toUpperCase()+'</span>'+
+        '<button onclick="AQUA.EVENTS.dismissCard()" '+
+          'style="font-family:monospace;font-size:9px;padding:2px 6px;background:#111;border:1px solid #444;color:#888;cursor:pointer">✕</button>'+
+          'style="font-family:monospace;font-size:9px;padding:2px 6px;background:#111;border:1px solid #444;color:#888;cursor:pointer">✕</button>'+
+      '</div>'+
+      '<div style="font-size:10px;color:'+col+'">'+result.msg+'</div>'+
+      '<div style="font-size:9px;color:#888aaa;margin-top:3px">'+result.detail+'</div>'+
+      (result.cost>0?'<div style="font-size:9px;color:#ff6644;margin-top:3px">Repair cost: -$'+result.cost+' deducted</div>':'');
+    // Auto-dismiss after 8 seconds
+    clearTimeout(AQUA.EVENTS._dismissTimer);
+    AQUA.EVENTS._dismissTimer = setTimeout(function(){
+      if(card) card.style.display='none';
+    }, 8000);
+  },
+  _dismissTimer: null,
+  dismissCard: function() {
+    var card = document.getElementById('event-card');
+    if(card) card.style.display = 'none';
+  }
+};
+
+// ============================================================
+// AQUA.ACHIEVEMENTS — Achievement + tank rating system
+// PORT NOTE: G.achievements[] and G.tankRating are pure state.
+// checkAll() is a pure function. UI rendering is the only DOM part.
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §ACH  —  AQUA.ACHIEVEMENTS — Achievement tracking and tank rating
+// Search handle: §ACH
+// ════════════════════════════════════════════════════════════════
+
+// updateRating(G) — updates G.tankRating, emits weekly bonus log
+// PORT NOTE: All pure functions translate directly. G.achievements[] is saveable state.
+// ============================================================
+
+AQUA.ACHIEVEMENTS = {
+  DEFS: [
+    {id:'first_cycle',    name:'Cycle Complete',   icon:'🔬', desc:'Maintain 0 NH3 and 0 NO2 for 7 consecutive days.',
+     check: function(G){ return (G._cleanDays||0) >= 7; }},
+    {id:'planted_tank',   name:'Green Thumb',       icon:'🌿', desc:'Grow 3 plants simultaneously.',
+     check: function(G){ return G.plants.filter(function(p){return p.type==='plant';}).length >= 3; }},
+    {id:'sold_plant',     name:'Plant Merchant',    icon:'💰', desc:'Sell a grown plant.',
+     check: function(G){ return G.phase === 'sell_plant' || G.over; }},
+    {id:'survived_30',    name:'Month One',         icon:'📅', desc:'Keep fish alive for 30 days.',
+     check: function(G){ return G.day >= 30 && G.fish.some(function(f){return f.alive;}); }},
+    {id:'clean_water',    name:'Crystal Clear',     icon:'💎', desc:'Keep all parameters in safe range for 14 days.',
+     check: function(G){ return (G._perfectDays||0) >= 14; }},
+    {id:'collector',      name:'Collector',         icon:'🐠', desc:'Own 5 different species at once.',
+     check: function(G){
+       var species = new Set(G.fish.filter(function(f){return f.alive;}).map(function(f){return f.key;}));
+       G.cleaners.forEach(function(c){if(c.alive)species.add(c.key);});
+       return species.size >= 5;
+     }},
+    {id:'disease_survivor',name:'Crisis Manager',  icon:'💊', desc:'Cure a fish disease before it kills.',
+     check: function(G){ return G._curedDisease||false; }},
+    {id:'night_safe',     name:'Night Shift',       icon:'🌙', desc:'Complete 10 nights with O2 never below 4ppm.',
+     check: function(G){ return (G._safeNights||0) >= 10; }},
+    {id:'shrimp_colony',  name:'Shrimp Keeper',     icon:'🦐', desc:'Have 3 or more shrimp alive.',
+     check: function(G){
+       return G.cleaners.filter(function(c){
+         return c.alive && (AQUA.ITEMS[c.key]||{}).behaviors && AQUA.ITEMS[c.key].behaviors.indexOf('shrimp')>=0;
+       }).length >= 3;
+     }},
+    {id:'high_rating',    name:'Show Tank',         icon:'⭐', desc:'Achieve a tank rating of 80 or above.',
+     check: function(G){ return (G.tankRating||0) >= 80; }}
+  ],
+
+  // Update tracking counters in state each day tick
+  // PORT NOTE: pure state mutation — same logic in C++
+  updateTrackers: function(G) {
+    // Clean days: NH3 and NO2 both below threshold
+    if (G.chem.nh3 < 0.1 && G.chem.no2 < 0.1) {
+      G._cleanDays = (G._cleanDays||0) + 1;
+    } else {
+      G._cleanDays = 0;
+    }
+    // Perfect days: all key params in safe range
+    var perfect = G.chem.nh3 < 0.1 && G.chem.no2 < 0.1 && G.chem.o2 > 5 &&
+                  G.chem.ph >= 6.5 && G.chem.ph <= 8.5 && (G.algae||0) < 2 &&
+                  G.chem.kh >= 2 && G.fish.some(function(f){return f.alive;});
+    G._perfectDays = perfect ? (G._perfectDays||0)+1 : 0;
+    // Cured disease: fish had disease and now doesn't (cleared by treatment)
+    G.fish.forEach(function(f){
+      if (f._hadDisease && !f.disease) G._curedDisease = true;
+      if (f.disease) f._hadDisease = true;
+    });
+  },
+
+  // Compute tank rating (0-100) — called weekly and on status change
+  // PORT NOTE: pure function, no DOM
+  computeRating: function(G) {
+    if (!G.fish.some(function(f){return f.alive;})) return 0;
+    var score = 0;
+    var c = G.chem;
+    // Water quality (40 pts)
+    score += (c.nh3 < 0.1 ? 10 : c.nh3 < 0.3 ? 5 : 0);
+    score += (c.no2 < 0.1 ? 10 : c.no2 < 0.3 ? 5 : 0);
+    score += (c.o2  > 6   ? 10 : c.o2  > 4   ? 5 : 0);
+    score += (c.ph >= 6.8 && c.ph <= 7.8 ? 10 : c.ph >= 6.5 && c.ph <= 8.2 ? 5 : 0);
+    // Biodiversity (20 pts)
+    var speciesSet = {};
+    G.fish.forEach(function(f){if(f.alive)speciesSet[f.key]=1;});
+    G.cleaners.forEach(function(cl){if(cl.alive)speciesSet[cl.key]=1;});
+    var speciesCount = Object.keys(speciesSet).length;
+    score += Math.min(20, speciesCount * 5);
+    // Plants (15 pts)
+    var livePlants = G.plants.filter(function(p){return p.type==='plant';}).length;
+    score += Math.min(15, livePlants * 5);
+    // Algae penalty (−10 max)
+    score -= Math.min(10, Math.floor((G.algae||0)*2.5));
+    // Fish health average (15 pts)
+    var aliveFish = G.fish.filter(function(f){return f.alive;});
+    if (aliveFish.length) {
+      var avgHealth = aliveFish.reduce(function(s,f){return s+(f.health||0);},0)/aliveFish.length;
+      score += Math.round(avgHealth/100*15);
+    }
+    // KH/GH bonus (10 pts)
+    score += (c.kh >= 3 && c.gh >= 4 ? 10 : c.kh >= 1 ? 5 : 0);
+    return Math.max(0, Math.min(100, Math.round(score)));
+  },
+
+  // Check all achievements, return newly unlocked ones
+  checkAll: function(G) {
+    if (!G.achievements) G.achievements = [];
+    var newlyUnlocked = [];
+    AQUA.ACHIEVEMENTS.DEFS.forEach(function(def) {
+      if (G.achievements.indexOf(def.id) < 0 && def.check(G)) {
+        G.achievements.push(def.id);
+        newlyUnlocked.push(def);
+      }
+    });
+    return newlyUnlocked;
+  },
+
+  // Update tank rating (run weekly)
+  updateRating: function(G) {
+    G.tankRating = AQUA.ACHIEVEMENTS.computeRating(G);
+    if (G.day % 7 === 0) {
+      var bonus = Math.floor(G.tankRating / 20);  // 0-5 bonus $ for good tank
+      if (bonus > 0) {
+        G.money += bonus;
+        AQUA.BUS.emit('log', {msg:'Weekly tank inspection: '+G.tankRating+'/100 — +$'+bonus+' bonus!', type:'ok'});
+      } else {
+        AQUA.BUS.emit('log', {msg:'Weekly tank inspection: '+G.tankRating+'/100', type:'info'});
+      }
+    }
+    return G.tankRating;
+  }
+};
+
+
+// ════════════════════════════════════════════════════════════════
+// §PANELS  —  AQUA.panels — Tab UI, chemistry charts, Pourbaix, diurnal, fish profiles
+// Search handle: §PANELS
+// ════════════════════════════════════════════════════════════════
+
+// drawDiurnal() — 24-hour O2/CO2 cycle chart
+// drawRating() — tank rating + achievements panel
+// drawFishProfiles() — fish card list
+// PORT NOTE: Each panel maps to a separate UMG Widget in Unreal.
+// Canvas draw calls -> UCanvas or a DataViz plugin. Data structs are identical.
+// ============================================================
+
+AQUA.panels = {
+  _active: 0,
+  show: function(idx) {
+    AQUA.panels._active = idx;
+    document.querySelectorAll('.tab-panel').forEach(function(el,i){
+      el.classList.toggle('active', i===idx);
+    });
+    document.querySelectorAll('.tab-btn').forEach(function(el,i){
+      el.classList.toggle('active', i===idx);
+    });
+    if (idx===1) AQUA.panels.drawCharts();
+    if (idx===3) AQUA.panels.drawFishProfiles();
+    if (idx===4) AQUA.panels.drawPourbaix();
+    if (idx===5) AQUA.panels.drawCO2KHpH();
+    if (idx===6) AQUA.panels.drawDiurnal();
+    if (idx===7) AQUA.panels.drawRating();
+  },
+
+  // ── Chemistry chart — sparklines for all tracked params ──
+  // PORT NOTE: replace with Unreal LineChartWidget or custom UCanvas.
+  // Data source is AQUA.G.chemHistory[] — identical on Unreal side.
+  _highlightParam: null,
+  CHART_PARAMS: [
+    {key:'nh3',  label:'NH3',   color:'#ff4444', scale:1.0,  max:1.5},
+    {key:'no2',  label:'NO2',   color:'#ff8844', scale:1.0,  max:2},
+    {key:'no3',  label:'NO3',   color:'#ffcc44', scale:0.05, max:80},
+    {key:'po4',  label:'PO4',   color:'#ff44cc', scale:1.0,  max:3},
+    {key:'o2',   label:'O2',    color:'#44ffcc', scale:0.1,  max:10},
+    {key:'ph',   label:'pH',    color:'#88aaff', scale:0.2,  max:10},
+    {key:'algae',label:'Algae', color:'#44ff88', scale:0.1,  max:10},
+    {key:'redox',label:'Redox', color:'#cc88ff', scale:1.0,  max:1},
+    {key:'kh',   label:'KH',    color:'#44ddff', scale:0.1,  max:20},
+    {key:'gh',   label:'GH',    color:'#88ffdd', scale:0.1,  max:30}
+  ],
+  drawCharts: function() {
+    var canvas = document.getElementById('chart-canvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    var hist = (AQUA.G && AQUA.G.chemHistory) || [];
+    var hi = AQUA.panels._highlightParam;
+    ctx.clearRect(0,0,W,H);
+
+    // Background grid
+    ctx.fillStyle='#040210'; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='#1a0830'; ctx.lineWidth=1;
+    for (var gy=0; gy<H; gy+=H/5) {
+      ctx.beginPath(); ctx.moveTo(0,Math.round(gy)); ctx.lineTo(W,Math.round(gy)); ctx.stroke();
+    }
+    for (var gx=0; gx<W; gx+=W/10) {
+      ctx.beginPath(); ctx.moveTo(Math.round(gx),0); ctx.lineTo(Math.round(gx),H); ctx.stroke();
+    }
+
+    if (hist.length < 2) {
+      ctx.fillStyle='#556677'; ctx.font='12px monospace';
+      ctx.fillText('Advance days to see chemistry history.',20,H/2); return;
+    }
+
+    var N = hist.length;
+    AQUA.panels.CHART_PARAMS.forEach(function(p) {
+      var isHi = !hi || hi===p.key;
+      ctx.globalAlpha = isHi ? 1.0 : 0.15;
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = isHi ? 2 : 1;
+      ctx.beginPath();
+      hist.forEach(function(snap, i) {
+        var val = snap[p.key] || 0;
+        var nx = (i/(N-1))*W;
+        var ny = H - (val/p.max)*H;
+        ny = Math.max(2, Math.min(H-2, ny));
+        if (i===0) ctx.moveTo(nx,ny); else ctx.lineTo(nx,ny);
+      });
+      ctx.stroke();
+      // Label at right edge
+      var last = hist[hist.length-1];
+      var lv = last[p.key]||0;
+      var ly = H-(lv/p.max)*H;
+      ly = Math.max(10, Math.min(H-4, ly));
+      ctx.fillStyle = p.color;
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText(p.label+' '+(lv.toFixed ? lv.toFixed(2) : lv), W-58, ly);
+    });
+    ctx.globalAlpha = 1;
+
+    // X-axis day labels
+    ctx.fillStyle='#446677'; ctx.font='8px monospace';
+    var firstDay = hist[0].day, lastDay = hist[hist.length-1].day;
+    ctx.fillText('Day '+firstDay, 2, H-2);
+    ctx.fillText('Day '+lastDay, W-40, H-2);
+
+    // Legend
+    var leg = document.getElementById('chart-legend');
+    if (leg) {
+      leg.innerHTML='';
+      AQUA.panels.CHART_PARAMS.forEach(function(p) {
+        var el=document.createElement('div');
+        el.className='chart-legend-item';
+        el.style.cursor='pointer';
+        el.style.opacity = (!hi||hi===p.key)?'1':'0.4';
+        el.innerHTML='<div class="chart-legend-dot" style="background:'+p.color+'"></div>'+
+                     '<span style="color:'+p.color+'">'+p.label+'</span>';
+        el.onclick = function(){
+          AQUA.panels._highlightParam = (AQUA.panels._highlightParam===p.key)?null:p.key;
+          AQUA.panels.drawCharts();
+        };
+        leg.appendChild(el);
+      });
+    }
+  },
+
+  // ── Fish profiles panel ──
+  // PORT NOTE: maps to a ScrollBox of FishCard UMG widgets in Unreal.
+  // Each card reads from a fish instance — same data fields on both sides.
+  drawFishProfiles: function() {
+    var el = document.getElementById('fish-profiles'); if(!el)return;
+    var G = AQUA.G;
+    var all = G.fish.concat(G.cleaners);
+    if (all.length===0){el.innerHTML='<div style="color:#556677;font-size:10px">No inhabitants yet.</div>';return;}
+    // T2-D: Show remove-dead button when dead fish present
+    var deadFish = all.filter(function(f){return f.alive===false;});
+    if (deadFish.length > 0) {
+      var btn = document.createElement('button');
+      btn.textContent = '🪣 Remove '+(deadFish.length)+' Dead Fish (immediate)';
+      btn.style.cssText = 'background:#440000;color:#ff8888;border:1px solid #880000;padding:3px 8px;font-size:9px;cursor:pointer;margin-bottom:6px;width:100%';
+      btn.onclick = function() {
+        var G = AQUA.G;
+        G.fish = G.fish.filter(function(f){
+          if (f.alive!==false) return true;
+          G.chem.org = Math.min(3, G.chem.org + 0.15 * ((AQUA.ITEMS[f.key]||{}).mass||2)/5);
+          return false;
+        });
+        G.cleaners = G.cleaners.filter(function(f){
+          if (f.alive!==false) return true;
+          G.chem.org = Math.min(3, G.chem.org + 0.05);
+          return false;
+        });
+        AQUA.BUS.emit('log',{msg:'Dead fish removed — some organic waste released.',type:'warn'});
+        AQUA.BUS.emit('status_changed');
+        AQUA.save();
+      };
+      el.appendChild(btn);
+    }
+    el.innerHTML += '';
+    all.forEach(function(f) {
+      var it = AQUA.ITEMS[f.key]||{};
+      var alive = f.alive!==false;
+      var daysGone = alive ? 0 : (G.day - (f.daysDeadAt||G.day));
+      var daysLeft = Math.max(0, 3 - daysGone);
+      var div = document.createElement('div'); div.className='fish-card';
+      div.style.opacity = alive?'1':'0.4';
+      var gDesc = f.genes ? AQUA.GENETICS.describe(f.genes) : '—';
+      div.innerHTML=
+        '<div class="fish-card-name">'+(it.name||f.key)+(alive?'':' ✝')+'</div>'+
+        '<div style="color:#556677;font-size:9px;margin-bottom:4px">'+it.desc+'</div>'+
+        (alive?
+        '<div style="font-size:9px;color:#888aaa">Health</div>'+
+        '<div class="fish-bar-wrap"><div class="fish-bar" style="width:'+(f.health||0)+'%;background:'+(f.health>60?'#22dd44':f.health>30?'#ffcc00':'#ee2222')+'"></div></div>'+
+        '<div style="font-size:9px;color:#888aaa">Stress</div>'+
+        '<div class="fish-bar-wrap"><div class="fish-bar" style="width:'+(f.stress||0)+'%;background:'+(f.stress<30?'#22dd44':f.stress<60?'#ffcc00':'#ee2222')+'"></div></div>'+
+        '<div style="font-size:9px;color:#cc88ff;margin-top:3px">Genes: '+gDesc+'</div>'+
+        (f.disease ? '<div style="font-size:9px;color:#ff4444;margin-top:2px;background:#200000;padding:2px 4px">DISEASE: '+f.disease.replace('_',' ').toUpperCase()+' | Severity: '+(((f.severity||0)*100).toFixed(0))+'% | Day '+(f.daysSick||0)+'</div>' : '')+
+        '<div style="font-size:9px;color:#556677">Age: '+(f.age||0)+' days | Mass: '+(f.mass||0).toFixed(1)+'g</div>'
+        :'<div style="font-size:9px;color:#550000">Deceased — decomposes in '+daysLeft+' day(s) — will release waste!</div>');
+      el.appendChild(div);
+    });
+  },
+
+  // ── Pourbaix (Eh-pH) diagram ─────────────────────────────────────────────
+  // Eh derived from O2 saturation and NH3. Zones calibrated for gameplay signal.
+  // PORT NOTE: replace canvas calls with Unreal LineChartWidget / UCanvas.
+  drawPourbaix: function() {
+    var canvas = document.getElementById('pourbaix-canvas'); if(!canvas)return;
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    var G = AQUA.G; if(!G)return;
+    var c = G.chem;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#040210'; ctx.fillRect(0,0,W,H);
+
+    var PAD_L=48,PAD_R=12,PAD_T=14,PAD_B=36;
+    var PW=W-PAD_L-PAD_R, PH=H-PAD_T-PAD_B;
+    var pH_MIN=4,pH_MAX=10,Eh_MIN=-400,Eh_MAX=800;
+
+    function toX(pH){ return PAD_L+(pH-pH_MIN)/(pH_MAX-pH_MIN)*PW; }
+    function toY(Eh){ return PAD_T+(1-(Eh-Eh_MIN)/(Eh_MAX-Eh_MIN))*PH; }
+
+    // Stability zones
+    var zones=[
+      {phl:6.5,phr:8.5,ehl:-50,ehr:500,  col:'rgba(0,80,20,0.55)',  label:'SAFE ZONE',       safe:true},
+      {phl:4,  phr:6.5,ehl:-100,ehr:800, col:'rgba(80,0,0,0.38)',   label:'ACID stress',     safe:false},
+      {phl:8.5,phr:10, ehl:-100,ehr:800, col:'rgba(0,0,80,0.38)',   label:'ALKALINE stress', safe:false},
+      {phl:4,  phr:10, ehl:-400,ehr:-100,col:'rgba(60,0,80,0.50)',  label:'ANOXIC/reductive',safe:false},
+      {phl:7,  phr:9,  ehl:350, ehr:800, col:'rgba(0,40,60,0.38)',  label:'Fe-oxidized',     safe:true}
+    ];
+    zones.forEach(function(z){
+      ctx.fillStyle=z.col;
+      var x1=toX(z.phl),y1=toY(z.ehr),x2=toX(z.phr),y2=toY(z.ehl);
+      ctx.fillRect(x1,y1,x2-x1,y2-y1);
+    });
+
+    // Water stability lines (O2/H2O and H2O/H2 boundaries)
+    ctx.strokeStyle='rgba(80,180,255,0.55)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    ctx.beginPath();
+    for(var p=pH_MIN;p<=pH_MAX;p+=0.25){
+      var Eh_up=1230-59*p;
+      if(Eh_up>Eh_MAX)Eh_up=Eh_MAX; if(Eh_up<Eh_MIN)continue;
+      if(p===pH_MIN) ctx.moveTo(toX(p),toY(Eh_up)); else ctx.lineTo(toX(p),toY(Eh_up));
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    for(var p2=pH_MIN;p2<=pH_MAX;p2+=0.25){
+      var Eh_lo=-59*p2;
+      if(Eh_lo<Eh_MIN)Eh_lo=Eh_MIN; if(Eh_lo>Eh_MAX)continue;
+      if(p2===pH_MIN) ctx.moveTo(toX(p2),toY(Eh_lo)); else ctx.lineTo(toX(p2),toY(Eh_lo));
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Grid
+    ctx.strokeStyle='#1a0830'; ctx.lineWidth=1;
+    for(var gp=pH_MIN;gp<=pH_MAX;gp++){
+      ctx.beginPath();ctx.moveTo(toX(gp),PAD_T);ctx.lineTo(toX(gp),PAD_T+PH);ctx.stroke();
+    }
+    for(var ge=-400;ge<=800;ge+=200){
+      ctx.beginPath();ctx.moveTo(PAD_L,toY(ge));ctx.lineTo(PAD_L+PW,toY(ge));ctx.stroke();
+    }
+
+    // Zone labels
+    ctx.font='bold 9px monospace';
+    zones.forEach(function(z){
+      ctx.fillStyle=z.safe?'rgba(80,255,120,0.75)':'rgba(255,100,80,0.75)';
+      var mx=Math.max(PAD_L+4,Math.min(W-72,toX((z.phl+z.phr)/2)-20));
+      var my=Math.max(PAD_T+10,Math.min(PAD_T+PH-5,toY((z.ehl+z.ehr)/2)));
+      ctx.fillText(z.label,mx,my);
+    });
+
+    // Water boundary labels
+    ctx.fillStyle='rgba(80,180,255,0.8)'; ctx.font='8px monospace';
+    ctx.fillText('O2/H2O',toX(4.2),toY(1230-59*4.2)-4);
+    ctx.fillText('H2O/H2',toX(4.2),toY(-59*4.2)+10);
+
+    // Compute tank Eh (Nernst approximation)
+    var o2frac=Math.max(0.001,Math.min(1,c.o2/9));
+    var tankEh=1230-59*(c.ph||7)+(59/4)*Math.log10(o2frac)-(c.nh3||0)*120-(c.org||0)*60;
+    tankEh=Math.max(Eh_MIN,Math.min(Eh_MAX,tankEh));
+
+    // History trail
+    var hist=G.chemHistory||[];
+    if(hist.length>1){
+      ctx.strokeStyle='rgba(150,80,255,0.35)'; ctx.lineWidth=1.5; ctx.beginPath();
+      var started=false;
+      hist.forEach(function(snap){
+        var hO2=Math.max(0.001,Math.min(1,(snap.o2||8)/9));
+        var hEh=Math.max(Eh_MIN,Math.min(Eh_MAX,1230-59*(snap.ph||7)+(59/4)*Math.log10(hO2)-(snap.nh3||0)*120-(snap.org||0)*60));
+        var hpH=Math.max(pH_MIN,Math.min(pH_MAX,snap.ph||7));
+        if(!started){ctx.moveTo(toX(hpH),toY(hEh));started=true;}
+        else ctx.lineTo(toX(hpH),toY(hEh));
+      });
+      ctx.stroke();
+    }
+
+    // Tank dot
+    var tankPH=Math.max(pH_MIN,Math.min(pH_MAX,c.ph||7));
+    var tx=toX(tankPH), ty=toY(tankEh);
+    var inSafe=(tankPH>=6.5&&tankPH<=8.5&&tankEh>=-100&&tankEh<=700);
+    ctx.strokeStyle=inSafe?'rgba(0,255,120,0.45)':'rgba(255,40,40,0.55)';
+    ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(tx,ty,10,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle=inSafe?'#00ff88':'#ff2222';
+    ctx.beginPath();ctx.arc(tx,ty,5,0,Math.PI*2);ctx.fill();
+
+    // Crosshairs
+    ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(tx,PAD_T);ctx.lineTo(tx,PAD_T+PH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(PAD_L,ty);ctx.lineTo(PAD_L+PW,ty);ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Readout
+    var rdx=Math.min(W-140,tx+8), rdy=Math.max(PAD_T+12,ty-8);
+    ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(rdx-2,rdy-11,138,14);
+    ctx.fillStyle='#ffffff'; ctx.font='bold 10px monospace';
+    ctx.fillText('Eh='+Math.round(tankEh)+'mV pH='+c.ph.toFixed(2),rdx,rdy);
+
+    // Axes
+    ctx.strokeStyle='#cc44ff'; ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(PAD_L,PAD_T);ctx.lineTo(PAD_L,PAD_T+PH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(PAD_L,PAD_T+PH);ctx.lineTo(PAD_L+PW,PAD_T+PH);ctx.stroke();
+
+    ctx.fillStyle='#aa88cc'; ctx.font='9px monospace';
+    for(var lp=pH_MIN;lp<=pH_MAX;lp++) ctx.fillText(lp,toX(lp)-4,PAD_T+PH+14);
+    ctx.fillText('pH',PAD_L+PW/2-6,PAD_T+PH+26);
+    ctx.save();ctx.translate(12,PAD_T+PH/2+15);ctx.rotate(-Math.PI/2);
+    ctx.fillText('Eh (mV)',0,0);ctx.restore();
+    for(var le=-400;le<=800;le+=200) ctx.fillText(le,2,toY(le)+3);
+
+    var leg=document.getElementById('pourbaix-legend');
+    if(leg){
+      leg.innerHTML='<span style="color:'+(inSafe?'#00ff88':'#ff4444')+'">Tank: '+(inSafe?'SAFE':'OUTSIDE SAFE')+'</span>'
+        +'&nbsp;&nbsp;<span style="color:#cc88ff">Eh='+Math.round(tankEh)+'mV</span>'
+        +'&nbsp;&nbsp;<span style="color:#88aacc">pH='+c.ph.toFixed(2)+'</span>'
+        +'&nbsp;&nbsp;<span style="color:#4499ff;font-size:9px">Blue dashed = water stability limits</span>'
+        +'&nbsp;&nbsp;<span style="color:#8855ff;font-size:9px">Purple = history trail</span>';
+    }
+  },
+
+  // ── CO2 / KH / pH lookup table ───────────────────────────────────────────
+  // Formula: CO2(ppm) = 3 * KH(dKH) * 10^(7.0 - pH)  →  pH = 7 - log10(CO2/(3*KH))
+  // PORT NOTE: same math, replace canvas draw with Unreal widget grid.
+  drawCO2KHpH: function() {
+    var canvas=document.getElementById('co2kh-canvas'); if(!canvas)return;
+    var ctx=canvas.getContext('2d');
+    var W=canvas.width, H=canvas.height;
+    var G=AQUA.G; if(!G)return;
+    var c=G.chem;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#040210'; ctx.fillRect(0,0,W,H);
+
+    var KH_VALS=[1,2,3,4,5,6,7,8,10,12];
+    var CO2_VALS=[2,4,6,8,10,15,20,25,30,40];
+    var PAD_L=42,PAD_T=28,PAD_R=10,PAD_B=30;
+    var TW=W-PAD_L-PAD_R, TH=H-PAD_T-PAD_B;
+    var CW=TW/CO2_VALS.length, RH=TH/KH_VALS.length;
+
+    function pHcalc(co2,kh){ return 7.0-Math.log10(Math.max(0.01,co2)/(3*Math.max(0.1,kh))); }
+    function pHcol(pH){
+      if(pH<5.5)  return ['#5a0000','#ff8888'];
+      if(pH<6.0)  return ['#7a1000','#ffaa88'];
+      if(pH<6.5)  return ['#6a3500','#ffcc66'];
+      if(pH<6.8)  return ['#3a5000','#ccee44'];
+      if(pH<7.5)  return ['#003a1a','#44ff88'];
+      if(pH<8.0)  return ['#002040','#44aaff'];
+      if(pH<8.5)  return ['#001060','#8877ff'];
+      return ['#2a0050','#dd44ff'];
+    }
+
+    // Draw cells
+    KH_VALS.forEach(function(kh,ri){
+      CO2_VALS.forEach(function(co2,ci){
+        var pH=pHcalc(co2,kh);
+        var cols=pHcol(pH);
+        var cx=PAD_L+ci*CW, cy=PAD_T+ri*RH;
+        ctx.fillStyle=cols[0]; ctx.fillRect(cx,cy,CW-1,RH-1);
+        ctx.fillStyle=cols[1]; ctx.font='bold 9px monospace';
+        ctx.fillText(pH.toFixed(1),cx+CW/2-10,cy+RH/2+3);
+      });
+    });
+
+    // Highlight tank's nearest cell
+    var tkH=c.kh||4, tkC=c.co2||3;
+    var bri=0,bci=0,bkd=999,bcd=999;
+    KH_VALS.forEach(function(kh,ri){if(Math.abs(kh-tkH)<bkd){bkd=Math.abs(kh-tkH);bri=ri;}});
+    CO2_VALS.forEach(function(co2,ci){if(Math.abs(co2-tkC)<bcd){bcd=Math.abs(co2-tkC);bci=ci;}});
+    ctx.strokeStyle='#ffff00'; ctx.lineWidth=2.5;
+    ctx.strokeRect(PAD_L+bci*CW,PAD_T+bri*RH,CW-1,RH-1);
+    ctx.fillStyle='#ffff00'; ctx.font='bold 8px monospace';
+    ctx.fillText('YOU',PAD_L+bci*CW+CW/2-8,PAD_T+bri*RH-4);
+
+    // Headers
+    ctx.fillStyle='#cc88ff'; ctx.font='bold 9px monospace';
+    CO2_VALS.forEach(function(co2,ci){ ctx.fillText(co2,PAD_L+ci*CW+CW/2-8,PAD_T-10); });
+    KH_VALS.forEach(function(kh,ri){  ctx.fillText(kh, PAD_L-26,PAD_T+ri*RH+RH/2+3); });
+
+    ctx.fillStyle='#aa88cc'; ctx.font='9px monospace';
+    ctx.fillText('CO2 ppm',PAD_L+TW/2-22,12);
+    ctx.save();ctx.translate(10,PAD_T+TH/2+12);ctx.rotate(-Math.PI/2);ctx.fillText('KH (dKH)',0,0);ctx.restore();
+
+    // pH color legend
+    var litems=[['#44ff88','6.5-7.5 optimal'],['#ccee44','6.0-6.5'],['#44aaff','7.5-8.0'],['#ffcc66','<6.5'],['#8877ff','>8.0']];
+    var lx=PAD_L;
+    litems.forEach(function(li){
+      ctx.fillStyle=li[0]; ctx.fillRect(lx,H-16,10,10);
+      ctx.fillStyle='#aaaacc'; ctx.font='8px monospace';
+      ctx.fillText(li[1],lx+12,H-7);
+      lx+=TW/litems.length+6;
+    });
+
+    var inf=document.getElementById('co2kh-info');
+    if(inf){
+      var tpH=pHcalc(Math.max(0.5,tkC),Math.max(0.1,tkH));
+      var diff=Math.abs(tpH-c.ph);
+      inf.innerHTML='Tank CO2='+tkC.toFixed(1)+'ppm | KH='+tkH.toFixed(1)+'dKH &rarr; formula pH=<b style="color:#44ff88">'+tpH.toFixed(2)+'</b>'
+        +' | actual pH=<b style="color:#88aaff">'+c.ph.toFixed(2)+'</b>'
+        +(diff>0.3?' &nbsp;<span style="color:#ff8844">Discrepancy '+diff.toFixed(2)+' &mdash; KH may be depleted or CO2 spiking</span>':'&nbsp;<span style="color:#00cc44">Balanced</span>');
+    }
+  }
+};
+
+
+// ============================================================
+// AQUA.NIGHT — Night transition UI controller
+// PORT NOTE: In Unreal, replace with a Blueprint timeline widget.
+// AQUA.NIGHT.begin() reads the summary struct from SIM.nightTicks()
+// and animates the overlay. The pure sim data (diurnalLog, summary)
+// is identical on both sides of the port — only this block changes.
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §NIGHT  —  AQUA.NIGHT — Night transition UI, drawRating, drawDiurnal
+// Search handle: §NIGHT
+// ════════════════════════════════════════════════════════════════
+
+// Replace with a Blueprint Timeline that reads the summary struct.
+// ============================================================
+
+AQUA.NIGHT = {
+  _timer: null,
+
+  lockButtons: function(lock) {
+    ['btn-feed','btn-water','btn-store','btn-skip'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) { el.disabled = lock; el.style.opacity = lock ? '0.35' : '1'; }
+    });
+  },
+
+  begin: function(summary, onComplete) {
+    var overlay = document.getElementById('night-overlay');
+    var statusEl = document.getElementById('night-status');
+    var summaryEl = document.getElementById('night-summary');
+    var footerEl = document.getElementById('night-footer');
+    if (!overlay) { onComplete(); return; }
+
+    overlay.style.display = 'block';
+
+    // Draw the mini night-canvas sparkline (O2 and CO2 across the 6 night sub-ticks)
+    AQUA.NIGHT._drawNightCanvas(summary);
+
+    // Populate summary grid
+    function statCell(label, val, unit, good) {
+      var col = good ? '#44ff88' : '#ff4444';
+      var sign = val > 0 ? '+' : '';
+      return '<div style="background:#060018;border:1px solid #220055;padding:4px;text-align:center">'
+        +'<div style="font-size:8px;color:#666688">'+label+'</div>'
+        +'<div style="font-size:11px;color:'+col+'">'+sign+val+' '+unit+'</div>'
+        +'</div>';
+    }
+    summaryEl.innerHTML =
+      statCell('O2 change',  summary.o2Change,  'ppm', summary.o2Change >= 0) +
+      statCell('CO2 change', summary.co2Change, 'ppm', summary.co2Change <= 0) +
+      statCell('pH change',  summary.phChange,  '',    Math.abs(summary.phChange) < 0.3) +
+      statCell('NH3 change', summary.nh3Change, 'ppm', summary.nh3Change <= 0) +
+      statCell('Min O2',     summary.minO2,     'ppm', summary.minO2 >= 4) +
+      statCell('Morning CO2',summary.morningCO2,'ppm', summary.morningCO2 <= 15);
+
+    // Warnings
+    var warns = [];
+    if (summary.minO2 < 4)    warns.push('O2 dropped to '+summary.minO2+' ppm overnight!');
+    if (summary.co2Danger)    warns.push('CO2 reached '+summary.morningCO2+' ppm — fish stressed!');
+    if (summary.khDepleted)   warns.push('KH depleted overnight — pH unstable!');
+    if (summary.o2Change < -1.5) warns.push('Heavy O2 depletion — add bubbler or reduce bioload.');
+
+    var warnHtml = warns.map(function(w){
+      return '<div style="color:#ff4444;font-size:9px;text-align:center">⚠ '+w+'</div>';
+    }).join('');
+
+    // Animate: show overlay for ~2.5s then call onComplete
+    var step = 0;
+    var msgs = ['Lights off...', 'Night cycle running...', 'CO2 '+(summary.co2Change>0?'building':'stable')+'...', 'O2 '+(summary.o2Change<0?'dipping':'holding')+'...', 'Morning approaching...'];
+    statusEl.textContent = msgs[0];
+
+    AQUA.NIGHT._timer = setInterval(function() {
+      step++;
+      if (step < msgs.length) {
+        statusEl.textContent = msgs[step];
+      } else {
+        clearInterval(AQUA.NIGHT._timer);
+        footerEl.innerHTML = warnHtml || '<span style="color:#44ff88">Night was uneventful. Good morning!</span>';
+        setTimeout(function() {
+          overlay.style.display = 'none';
+          onComplete();
+        }, 900);
+      }
+    }, 420);
+  },
+
+  _drawNightCanvas: function(summary) {
+    var canvas = document.getElementById('night-canvas'); if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#020008'; ctx.fillRect(0,0,W,H);
+
+    var log = (AQUA.G && AQUA.G.diurnalLog) || [];
+    if (log.length < 2) {
+      ctx.fillStyle='#444466'; ctx.font='10px monospace';
+      ctx.fillText('End your first day to see overnight data.',20,H/2);
+      return;
+    }
+
+    var PAD=20;
+    var PW=W-PAD*2, PH2=H-PAD*2;
+    var o2Max=10, co2Max=Math.max(10, summary.morningCO2+2);
+    var N=log.length;
+
+    // Night shading
+    log.forEach(function(s,i){
+      if(!s.isNight) return;
+      var x=PAD+i/N*PW;
+      ctx.fillStyle='rgba(0,0,40,0.6)';
+      ctx.fillRect(x,PAD,PW/N+1,PH2);
+    });
+
+    // O2 line
+    ctx.strokeStyle='#44ffcc'; ctx.lineWidth=2; ctx.beginPath();
+    log.forEach(function(s,i){
+      var x=PAD+i/N*PW, y=PAD+(1-s.o2/o2Max)*PH2;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+
+    // CO2 line
+    ctx.strokeStyle='#ff8844'; ctx.lineWidth=2; ctx.beginPath();
+    log.forEach(function(s,i){
+      var x=PAD+i/N*PW, y=PAD+(1-Math.min(s.co2,co2Max)/co2Max)*PH2;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+
+    // Min O2 marker
+    var minIdx=0;
+    log.forEach(function(s,i){ if(s.o2<log[minIdx].o2) minIdx=i; });
+    var mx=PAD+minIdx/N*PW, my=PAD+(1-log[minIdx].o2/o2Max)*PH2;
+    ctx.fillStyle='#ff2222'; ctx.beginPath(); ctx.arc(mx,my,4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#ff6666'; ctx.font='8px monospace';
+    ctx.fillText('min O2 '+summary.minO2,mx+6,my+3);
+
+    // Labels
+    ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(PAD,PAD,70,24);
+    ctx.fillStyle='#44ffcc'; ctx.font='8px monospace'; ctx.fillText('O2 (ppm)',PAD+3,PAD+10);
+    ctx.fillStyle='#ff8844'; ctx.fillText('CO2 (ppm)',PAD+3,PAD+21);
+
+    // Night label
+    var firstNight=log.findIndex(function(s){return s.isNight;});
+    if(firstNight>=0){
+      ctx.fillStyle='rgba(100,100,255,0.35)';
+      ctx.fillText('NIGHT',PAD+firstNight/N*PW+4,PAD+PH2-4);
+    }
+  }
+};
+
+// ============================================================
+// drawDiurnal panel — added to AQUA.panels below via prototype extension
+// PORT NOTE: reads G.diurnalLog[] — same struct on Unreal side.
+// ============================================================
+AQUA.panels.drawRating = function() {
+  var el = document.getElementById('rating-panel'); if(!el)return;
+  var G = AQUA.G; if(!G)return;
+  var rating = AQUA.ACHIEVEMENTS.computeRating(G);
+  G.tankRating = rating;
+  var rCol = rating>=80?'#44ff88':rating>=50?'#ffcc44':'#ff6644';
+
+  // Rating bar
+  var html = '<div style="margin-bottom:8px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">';
+  html += '<span style="font-size:12px;color:'+rCol+'">'+rating+'/100</span>';
+  var label = rating>=80?'SHOW TANK':rating>=60?'HEALTHY':rating>=40?'ADEQUATE':'STRUGGLING';
+  html += '<span style="font-size:10px;color:'+rCol+'">'+label+'</span>';
+  html += '</div>';
+  html += '<div style="height:8px;background:#111;border:1px solid #330044">';
+  html += '<div style="height:100%;width:'+rating+'%;background:'+rCol+';transition:width .5s"></div></div>';
+  html += '<div style="font-size:9px;color:#556677;margin-top:3px">Inspected weekly — high rating = income bonus</div>';
+  html += '</div>';
+
+  // Scoring breakdown
+  var c = G.chem;
+  var breakdown = [
+    {label:'NH3 quality',  pts: c.nh3<0.1?10:c.nh3<0.3?5:0, max:10},
+    {label:'NO2 quality',  pts: c.no2<0.1?10:c.no2<0.3?5:0, max:10},
+    {label:'O2 level',     pts: c.o2>6?10:c.o2>4?5:0,        max:10},
+    {label:'pH balance',   pts: (c.ph>=6.8&&c.ph<=7.8)?10:(c.ph>=6.5&&c.ph<=8.2)?5:0, max:10},
+    {label:'Species diversity', pts: Math.min(20,Object.keys(
+      G.fish.filter(function(f){return f.alive;}).reduce(function(o,f){o[f.key]=1;return o;},{})
+    ).length*5), max:20},
+    {label:'Living plants', pts: Math.min(15,G.plants.filter(function(p){return p.type==='plant';}).length*5), max:15},
+    {label:'Fish health',  pts: G.fish.filter(function(f){return f.alive;}).length ?
+      Math.round(G.fish.filter(function(f){return f.alive;}).reduce(function(s,f){return s+(f.health||0);},0)/
+      G.fish.filter(function(f){return f.alive;}).length/100*15) : 0, max:15},
+    {label:'KH/GH balance', pts: (c.kh>=3&&c.gh>=4)?10:c.kh>=1?5:0, max:10},
+    {label:'Algae penalty', pts: -Math.min(10,Math.floor((G.algae||0)*2.5)), max:0},
+  ];
+
+  html += '<div style="margin-bottom:8px">';
+  breakdown.forEach(function(b){
+    var bc = b.pts===b.max&&b.max>0?'#44ff88':b.pts>0?'#ffcc44':b.pts<0?'#ff4444':'#444466';
+    var bar = b.max > 0 ? '<div style="height:3px;background:#111;margin-top:1px"><div style="height:100%;width:'+Math.round(Math.max(0,b.pts)/b.max*100)+'%;background:'+bc+'"></div></div>' : '';
+    html += '<div style="display:flex;justify-content:space-between;font-size:9px;color:'+bc+';padding:1px 0">'+
+      '<span>'+b.label+'</span><span>'+(b.pts>0?'+':'')+b.pts+(b.max>0?'/'+b.max:'')+'</span></div>'+bar;
+  });
+  html += '</div>';
+
+  // Achievements
+  if(!G.achievements) G.achievements=[];
+  html += '<div style="font-size:9px;color:#cc88ff;margin-bottom:4px;letter-spacing:1px">ACHIEVEMENTS</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">';
+  AQUA.ACHIEVEMENTS.DEFS.forEach(function(def){
+    var unlocked = G.achievements.indexOf(def.id) >= 0;
+    html += '<div style="background:'+(unlocked?'#001a08':'#0a0520')+';border:1px solid '+(unlocked?'#00cc44':'#220033')+
+      ';padding:4px;opacity:'+(unlocked?1:0.45)+'">';
+    html += '<div style="font-size:10px;color:'+(unlocked?'#44ff88':'#886699')+'">'+(unlocked?'✓ ':'')+def.icon+' '+def.name+'</div>';
+    html += '<div style="font-size:8px;color:#556677">'+def.desc+'</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Active events / bladder snails
+  if (G._bladderSnails > 0) {
+    html += '<div style="margin-top:6px;font-size:9px;color:#ffaa44;background:#1a0800;border:1px solid #664400;padding:4px">'+
+      '🐚 Bladder snails: '+G._bladderSnails+' — buy assassin snail or copper treatment to control</div>';
+  }
+
+  el.innerHTML = html;
+};
+
+AQUA.panels.drawDiurnal = function() {
+  var canvas=document.getElementById('diurnal-canvas'); if(!canvas)return;
+  var ctx=canvas.getContext('2d');
+  var W=canvas.width, H=canvas.height;
+  var G=AQUA.G; if(!G)return;
+  var log=G.diurnalLog||[];
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#040210'; ctx.fillRect(0,0,W,H);
+
+  if(log.length<2){
+    ctx.fillStyle='#446677'; ctx.font='11px monospace';
+    ctx.fillText('End your first day to see the 24-hour O2/CO2 cycle.',30,H/2);
+    return;
+  }
+
+  var PAD_L=36,PAD_R=12,PAD_T=14,PAD_B=28;
+  var PW=W-PAD_L-PAD_R, PH=H-PAD_T-PAD_B;
+  var N=log.length;
+  var o2Max=10;
+  var co2Vals=log.map(function(s){return s.co2;}); 
+  var co2Max=Math.max(10,Math.ceil(Math.max.apply(null,co2Vals))+2);
+
+  // Night zone shading
+  log.forEach(function(s,i){
+    if(!s.isNight)return;
+    var x=PAD_L+i/N*PW;
+    ctx.fillStyle='rgba(0,0,30,0.55)';
+    ctx.fillRect(x,PAD_T,PW/N+1,PH);
+  });
+  // Night label
+  var fn=log.findIndex(function(s){return s.isNight;});
+  if(fn>=0){
+    ctx.fillStyle='rgba(80,80,200,0.55)'; ctx.font='9px monospace';
+    ctx.fillText('NIGHT',PAD_L+fn/N*PW+4,PAD_T+12);
+    ctx.fillText('DAY',PAD_L+4,PAD_T+12);
+  }
+
+  // Safe O2 zone (4-10 ppm)
+  var safeY=PAD_T+(1-4/o2Max)*PH;
+  ctx.strokeStyle='rgba(0,180,100,0.25)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(PAD_L,safeY); ctx.lineTo(PAD_L+PW,safeY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(0,180,100,0.18)'; ctx.fillRect(PAD_L,PAD_T,PW,safeY-PAD_T);
+  ctx.fillStyle='rgba(0,180,100,0.3)'; ctx.font='8px monospace';
+  ctx.fillText('O2 safe ≥4ppm',PAD_L+3,safeY-3);
+
+  // CO2 danger zone (>15 ppm)
+  var dangerY=PAD_T+(1-15/co2Max)*PH;
+  ctx.strokeStyle='rgba(255,80,0,0.25)'; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(PAD_L,dangerY); ctx.lineTo(PAD_L+PW,dangerY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,80,0,0.12)'; ctx.fillRect(PAD_L,PAD_T,PW,dangerY-PAD_T);
+  ctx.fillStyle='rgba(255,130,0,0.6)'; ctx.font='8px monospace';
+  ctx.fillText('CO2 danger >15ppm',PAD_L+3,dangerY-3);
+
+  // O2 area fill
+  ctx.fillStyle='rgba(0,220,180,0.08)'; ctx.beginPath();
+  log.forEach(function(s,i){
+    var x=PAD_L+i/N*PW, y=PAD_T+(1-s.o2/o2Max)*PH;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.lineTo(PAD_L+PW,PAD_T+PH); ctx.lineTo(PAD_L,PAD_T+PH); ctx.closePath(); ctx.fill();
+
+  // O2 line
+  ctx.strokeStyle='#44ffcc'; ctx.lineWidth=2.5; ctx.beginPath();
+  log.forEach(function(s,i){
+    var x=PAD_L+i/N*PW, y=PAD_T+(1-s.o2/o2Max)*PH;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // CO2 area fill
+  ctx.fillStyle='rgba(255,130,0,0.06)'; ctx.beginPath();
+  log.forEach(function(s,i){
+    var x=PAD_L+i/N*PW, y=PAD_T+(1-Math.min(s.co2,co2Max)/co2Max)*PH;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.lineTo(PAD_L+PW,PAD_T+PH); ctx.lineTo(PAD_L,PAD_T+PH); ctx.closePath(); ctx.fill();
+
+  // CO2 line
+  ctx.strokeStyle='#ff8844'; ctx.lineWidth=2.5; ctx.beginPath();
+  log.forEach(function(s,i){
+    var x=PAD_L+i/N*PW, y=PAD_T+(1-Math.min(s.co2,co2Max)/co2Max)*PH;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // pH line (secondary, thin)
+  ctx.strokeStyle='rgba(136,170,255,0.6)'; ctx.lineWidth=1.5; ctx.beginPath();
+  log.forEach(function(s,i){
+    var x=PAD_L+i/N*PW, y=PAD_T+(1-(s.ph-5)/5)*PH;
+    y=Math.max(PAD_T,Math.min(PAD_T+PH,y));
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // Min O2 marker
+  var minI=0; log.forEach(function(s,i){if(s.o2<log[minI].o2)minI=i;});
+  var mox=PAD_L+minI/N*PW, moy=PAD_T+(1-log[minI].o2/o2Max)*PH;
+  ctx.fillStyle='#ff2222'; ctx.beginPath(); ctx.arc(mox,moy,5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(mox+7,moy-11,80,13);
+  ctx.fillStyle='#ff6666'; ctx.font='8px monospace';
+  ctx.fillText('nadir '+log[minI].o2.toFixed(1)+'ppm',mox+9,moy-1);
+
+  // X axis — hour labels
+  ctx.fillStyle='#aa88cc'; ctx.font='8px monospace';
+  var hourLabels=['6am','9am','12pm','3pm','6pm','9pm','12am','3am','6am'];
+  var labelSlots=[0,3,6,9,12,15,18,21,23];
+  labelSlots.forEach(function(si){
+    if(si>=N)return;
+    ctx.fillText(hourLabels[Math.floor(si/3)], PAD_L+si/N*PW-8, PAD_T+PH+14);
+  });
+  // Simpler: just label every 4 slots
+  ctx.fillStyle='#776699'; ctx.font='8px monospace';
+  log.forEach(function(s,i){
+    if(i%4!==0)return;
+    var label = s.isNight ? (s.hour+':00') : (s.hour+':00');
+    ctx.fillText(label, PAD_L+i/N*PW-8, PAD_T+PH+14);
+  });
+
+  // Y axis labels
+  ctx.fillStyle='#44ffcc'; ctx.font='8px monospace';
+  [0,4,6,8,10].forEach(function(v){
+    ctx.fillText(v,2,PAD_T+(1-v/o2Max)*PH+3);
+  });
+  ctx.save(); ctx.translate(8,PAD_T+PH/2+10); ctx.rotate(-Math.PI/2);
+  ctx.fillText('O2 ppm',0,0); ctx.restore();
+
+  // Legend
+  var leg=document.getElementById('diurnal-legend');
+  if(leg){
+    leg.innerHTML=
+      '<span style="color:#44ffcc">&#9644; O2 (ppm, left axis)</span>'+
+      '&nbsp;&nbsp;<span style="color:#ff8844">&#9644; CO2 (ppm, right-scaled)</span>'+
+      '&nbsp;&nbsp;<span style="color:#8899ff">&#9644; pH (5-10 scaled)</span>'+
+      '&nbsp;&nbsp;<span style="color:#444466;background:#000020;padding:0 4px">Night zone shaded</span>';
+  }
+};
+
+// ============================================================
+// AQUA.RENDER_ADAPTER — Sprite/draw function registry
+// The renderer calls ADAPTER.drawEntity(ctx, entity, x, y, tick)
+// and knows NOTHING about species names. Each species registers
+// its own draw function here.
+//
+// PORT NOTE: in Unreal, this becomes a TMap<FName, UStaticMesh*> or
+// TMap<FName, USkeletalMesh*> data asset. The frame loop asks the
+// registry for the mesh, same pattern. Adding a new fish = register
+// its mesh here. The frame loop never changes.
+//
+// CURRENT BEHAVIOR: all unrecognized species fall back to a generic
+// colored rectangle placeholder. When the graphics overhaul happens,
+// replace each entry's drawFn with a real sprite/mesh call.
+// Color tinting from entity.genes.colorGene is passed in but currently
+// only visible on the placeholder rect — sprite-level color will use it later.
+// ============================================================
+AQUA.RENDER_ADAPTER = (function() {
+  var _registry = {};
+
+  function hslFromGene(genes, defaultHue) {
+    if (!genes) return 'hsl('+defaultHue+',70%,55%)';
+    var h = (defaultHue + genes.colorGene * 0.15) % 360;
+    var s = Math.round(40 + genes.satGene * 50);
+    return 'hsl('+Math.round(h)+','+s+'%,55%)';
+  }
+
+  // Generic placeholder: draws a colored rectangle with a label
+  function placeholderDraw(X, entity, x, y, tick, spriteCache, SCALE) {
+    var it = AQUA.ITEMS[entity.key]||{};
+    var mass = entity.mass||2;
+    var sc = Math.max(0.7, mass/5+0.4);
+    var w = Math.round(16*SCALE*sc), h2 = Math.round(10*SCALE*sc);
+    var col = hslFromGene(entity.genes, 30);
+    X.fillStyle = col;
+    X.fillRect(Math.round(x-w/2), Math.round(y-h2/2), w, h2);
+    // Health bar
+    X.fillStyle='rgba(0,0,0,0.5)';
+    X.fillRect(Math.round(x-w/2), Math.round(y-h2/2-5), w, 3);
+    X.fillStyle=(entity.health||100)>60?'#22dd44':(entity.health||100)>30?'#ffcc00':'#ee2222';
+    X.fillRect(Math.round(x-w/2), Math.round(y-h2/2-5), Math.round(w*((entity.health||100)/100)), 3);
+  }
+
+  // Register a species draw function
+  function register(key, drawFn) { _registry[key] = drawFn; }
+
+  // Draw an entity — falls back to placeholder if no registered fn
+  function drawEntity(X, entity, x, y, tick, spriteCache, SCALE) {
+    var fn = _registry[entity.key] || placeholderDraw;
+    fn(X, entity, x, y, tick, spriteCache, SCALE);
+  }
+
+  // Register known species that have real sprites
+  // (Goldfish and Guppy have pixel art sprites; everything else gets placeholder)
+  register('goldfish', function(X, entity, x, y, tick, cache, SCALE) {
+    var frameIdx=[0,1,2,1][Math.floor(tick/8)%4];
+    var sprKey='goldfish_'+frameIdx;
+    if(!cache[sprKey])sprKey='goldfish_0';
+    if(!cache[sprKey]){placeholderDraw(X,entity,x,y,tick,cache,SCALE);return;}
+    var sc=Math.max(0.8,entity.mass/5+0.5);
+    var sw=Math.round(16*SCALE*sc),sh=Math.round(16*SCALE*sc);
+    var src=entity.dir>0?cache[sprKey]:cache[sprKey+'_flip'];
+    X.imageSmoothingEnabled=false;
+    X.drawImage(src||cache[sprKey],Math.round(x-sw/2),Math.round(y-sh/2),sw,sh);
+    X.fillStyle='rgba(0,0,0,0.6)';X.fillRect(Math.round(x-sw/2),Math.round(y-sh/2-5),sw,3);
+    X.fillStyle=entity.health>60?'#22dd44':entity.health>30?'#ffcc00':'#ee2222';
+    X.fillRect(Math.round(x-sw/2),Math.round(y-sh/2-5),Math.round(sw*(entity.health/100)),3);
+    if(entity.stress>45){X.globalAlpha=0.12+0.08*Math.sin(tick*.2);X.fillStyle='#ff0000';X.fillRect(Math.round(x-sw/2),Math.round(y-sh/2),sw,sh);X.globalAlpha=1;}
+  });
+
+  register('guppy', function(X, entity, x, y, tick, cache, SCALE) {
+    var frameIdx=[0,1,0,1][Math.floor(tick/10)%4];
+    var sprKey='guppy_'+frameIdx;
+    if(!cache[sprKey]){placeholderDraw(X,entity,x,y,tick,cache,SCALE);return;}
+    var sc=Math.max(0.6,entity.mass/3+0.3);
+    var sw=Math.round(16*SCALE*sc),sh=Math.round(16*SCALE*sc);
+    var src=entity.dir>0?cache[sprKey]:cache[sprKey+'_flip'];
+    X.imageSmoothingEnabled=false;
+    X.drawImage(src||cache[sprKey],Math.round(x-sw/2),Math.round(y-sh/2),sw,sh);
+    X.fillStyle='rgba(0,0,0,0.6)';X.fillRect(Math.round(x-sw/2),Math.round(y-sh/2-5),sw,3);
+    X.fillStyle=entity.health>60?'#22dd44':entity.health>30?'#ffcc00':'#ee2222';
+    X.fillRect(Math.round(x-sw/2),Math.round(y-sh/2-5),Math.round(sw*(entity.health/100)),3);
+  });
+
+  // Guppy sprite reused as placeholder for betta (same shape, tinted differently in future)
+  ['betta','neon_tetra','corydoras','angelfish','molly','platy','otocinclus','rainbowfish'].forEach(function(k){
+    register(k, function(X,entity,x,y,tick,cache,SCALE){
+      placeholderDraw(X,entity,x,y,tick,cache,SCALE);
+    });
+  });
+
+  register('shrimp', function(X, entity, x, y, tick, cache, SCALE) {
+    var s=cache['shrimp'];
+    if(!s){placeholderDraw(X,entity,x,y,tick,cache,SCALE);return;}
+    X.imageSmoothingEnabled=false;
+    // Future: tint canvas with entity.genes.colorGene before drawing
+    X.drawImage(s,Math.round(x),Math.round(y),Math.round(16*SCALE*.75),Math.round(16*SCALE*.75));
+  });
+  ['amano_shrimp','ghost_shrimp'].forEach(function(k){
+    register(k,function(X,entity,x,y,tick,cache,SCALE){placeholderDraw(X,entity,x,y,tick,cache,SCALE);});
+  });
+  register('snail',function(X,entity,x,y,tick,cache,SCALE){
+    var s=cache['snail'];
+    if(!s){placeholderDraw(X,entity,x,y,tick,cache,SCALE);return;}
+    X.imageSmoothingEnabled=false;
+    X.drawImage(s,Math.round(x),Math.round(y),Math.round(16*SCALE*.85),Math.round(16*SCALE*.85));
+  });
+  register('mystery_snail',function(X,entity,x,y,tick,cache,SCALE){
+    placeholderDraw(X,entity,x,y,tick,cache,SCALE);
+  });
+
+  return { register:register, drawEntity:drawEntity };
+})();
+
+// ============================================================
+// UI event subscriptions
+// PORT NOTE: delete this block on Unreal; replace with Blueprint nodes
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §RENDERER  —  AQUA.renderer — Pixel art canvas renderer (PORT TARGET: delete on Unreal/Unity)
+// Search handle: §RENDERER
+// ════════════════════════════════════════════════════════════════
+
+// PORT NOTE: DELETE this file on port. Replace with Unreal Actor Tick + Niagara FX.
+// RENDER_ADAPTER pattern: TMap<FName, UStaticMesh*> or skeletal mesh registry.
+// ============================================================
+
+AQUA.renderer = (function() {
+  var C,X,W,H,tick=0,SCALE=3,cache={};
+
+  function init(canvas){C=canvas;X=C.getContext('2d');W=C.width;H=C.height;X.imageSmoothingEnabled=false;}
+
+  function buildSprite(key,rows,pal){
+    var oc=document.createElement('canvas');oc.width=16;oc.height=16;
+    var ox=oc.getContext('2d');ox.imageSmoothingEnabled=false;
+    for(var r=0;r<rows.length;r++)for(var c2=0;c2<rows[r].length;c2++){var ch=rows[r][c2];if(ch===' ')continue;ox.fillStyle=pal[ch];ox.fillRect(c2,r,1,1);}
+    cache[key]=oc;
+  }
+  function mkFlip(key){
+    var fk=key+'_flip';if(cache[fk])return;var src=cache[key];if(!src)return;
+    var oc=document.createElement('canvas');oc.width=16;oc.height=16;
+    var ox=oc.getContext('2d');ox.imageSmoothingEnabled=false;
+    ox.translate(16,0);ox.scale(-1,1);ox.drawImage(src,0,0);cache[fk]=oc;
+  }
+  function buildAllSprites(){
+    var gfP={O:'#1a0800',L:'#ffd966',M:'#ff9922',D:'#bb4400',G:'#fff0aa',W:'#ffffff',P:'#1a0800',F:'#cc3300',R:'#ff5500'};
+    ['goldfish_0','goldfish_1','goldfish_2','goldfish_3'].forEach(function(k,i){
+      var frames=[
+        ['      OOOOOO    ','    OOLMMMDO    ','   OLMMMMMMDOO  ','  OLMMMGGGMMDO  ',' OFLMMMGGGMMMDO ','OFFLMMMMMMMMDO  ','OFFLMMWPMMMDO   ','OFLMMMMMMMMDO   ',' OOLMMMMMMDO    ','  OOLMMMMDOO    ','   OOOOODOO     ','      OFO       ','     OFFO       ','    OFFOO       ','   OOFOO        ','    OO          '],
+        ['      OOOOOO    ','    OOLMMMDO    ','   OLMMMMMMDOO  ','  OLMMMGGGMMDO  ',' OFLMMMGGGMMMDO ','OFFLMMMMMMMMDO  ','OFFLMMWPMMMDO   ','OFLMMMMMMMMDO   ',' OOLMMMMMMDO    ','  OOLMMMMDOO    ','   OOOOOODOO    ','    OFFOOO      ','    OFFOO       ','    OOFOO       ','                ','                '],
+        ['    OO          ','   OOFOO        ','    OFFOO       ','     OFFO       ','      OFO       ','   OOOOODOO     ','  OOLMMMMDOO    ',' OOLMMMMMMDO    ','OFLMMMMMMMMDO   ','OFFLMMWPMMMDO   ','OFFLMMMMMMMMDO  ',' OFLMMMGGGMMMDO ','  OLMMMGGGMMDO  ','   OLMMMMMMDOO  ','    OOLMMMDO    ','      OOOOOO    '],
+        ['      OOOOOO    ','    OOLMMMDO    ','   OLMMMMMMDOO  ','  OLMMMGGGMMDO  ',' OFLMMMGGGMMMDO ','OFFLMMMMMMMMDO  ','OFFLMMWPMMMDO   ','OFLMMMMMMMMDO   ',' OOLMMMMMMDO    ','  OOLMMMMDOO    ','   OOOOOODOO    ','     OFFOO      ','    OOFOO       ','                ','                ','                ']
+      ];buildSprite(k,frames[i],gfP);mkFlip(k);
+    });
+    var gpP={O:'#110022',H:'#ddaaff',M:'#9944ee',D:'#551188',B:'#ff77cc',T:'#ff44aa',W:'#ffffff',P:'#110022',Y:'#ffee66'};
+    buildSprite('guppy_0',['                ','     OOOOO      ','   OOHMMMDO     ','  OHMBBBMMDO    ',' OHMBBWPBMMDO   ','OTHMMBBBMMMDO   ','OTTHMMMMMMDO    ','OTTHMMMMMDO     ',' OOTHMMMDOO     ','  OOTMMDOO      ','   OTTDOO       ','   OT OO        ','   O            ','                ','                ','                '],gpP);
+    buildSprite('guppy_1',['                ','     OOOOO      ','   OOHMMMDO     ','  OHMBBBMMDO    ',' OHMBBWPBMMDO   ','OTHMMBBBMMMDO   ','OTTHMMMMMMDO    ','OTTHMMMMMDO     ',' OOTHMMMDOO     ','  OOOTTDOO      ','    OT OO       ','    O  O        ','                ','                ','                ','                '],gpP);
+    mkFlip('guppy_0');mkFlip('guppy_1');
+    var shP={O:'#2a0000',R:'#cc2200',L:'#ff6644',H:'#ffaa88',W:'#ffeeee',S:'#881100',T:'#ffddcc',A:'#ff9977'};
+    buildSprite('shrimp',[' O   O          ',' OA OA          ','  OOOO          ','  OHHDOO        ',' OHLLLHDO       ','OOSRRRRRDOO     ','OOSRSSRRRDO     ','OOSRRRRRDOO     ',' OOLRRRDO       ',' OOTWWTOO       ',' OTOOOOTOO      ',' OT O O O       ','    O O O       ','                ','                ','                '],shP);
+    var snP={O:'#1a0800',H:'#eecc66',M:'#bb9933',D:'#775511',S:'#332200',B:'#ccaa77',F:'#996633',W:'#fff8cc'};
+    buildSprite('snail',['                ','    OOOO        ','   OHWWMDO      ','  OHWSMMMDO     ',' OHMSSSMMDOO    ','OOHMSMMMMMDO    ','OOHMMMMMMMDOO   ','OOHMMSSMMMDOO   ',' OOHMMMMDOO     ',' ODSSSSDOO      ','OOBBBBBBBDO     ','OOBBBBBBBDO     ','OOFFFFFFFFFDO   ',' OOOOOOOOOO     ','                ','                '],snP);
+    var jfP={O:'#0d1f00',H:'#aaee55',L:'#77cc33',M:'#448811',D:'#225500'};
+    buildSprite('javafern_frond',['    O           ','   OHOO         ','  OHLMOO        ',' OHLLMMOO       ','OHLLLMMMO       ','OHLLMMMMO       ',' OHLLMMMO       ','  OHLMMO        ','   OHLMO        ','    ODMO        ','     ODOO       ','      OO        ','                ','                ','                ','                '],jfP);
+    buildSprite('javafern_stem',['      OO        ','     OMMO       ','     OMMO       ','     OMMO       ','     ODDO       ','     ODDO       ','     ODDO       ','     ODDO       ','     ODDO       ','     ODDO       ','     OOOO       ','    OOOOOO      ','   OOOOOOOO     ','  OOOOOOOOOO    ',' OOOOOOOOOOOO   ','OOOOOOOOOOOOOO  '],{O:'#1a0800',M:'#886644',D:'#664422'});
+    var fpP={O:'#220011',H:'#ffbbee',M:'#ff44cc',D:'#cc0088',S:'#880055',G:'#bbbbbb',B:'#888888'};
+    buildSprite('fakeplant',['      OOO       ','     OHMDO      ','  OO OHMDO OO   ',' OHMDOHMMDDOO   ','OHMMDOHMMDOO    ','OHMMDHMMMDOO    ',' OHMDHMMDO      ','  OHDHMDOO      ','   OHMDO        ','   OOHDOO       ','    OBGO        ','    OBGO        ','    OBGO        ','    OBGO        ','    OBGO        ','   OBBGOO       '],fpP);
+    var fiP={O:'#0d1a22',D:'#1e3344',M:'#2d4d66',L:'#3d6688',H:'#5588aa',T:'#88bbcc',W:'#aaddee'};
+    buildSprite('filter',['  OOOOOO        ',' OWWWWWDOO      ',' OWTTTTWDO      ',' OWTTTTDOO      ',' OWTTTDO        ',' OOOOOOO        ',' OHHLHDO        ',' OHHLHDO        ',' OMMLMDO        ',' OMMLMDO        ',' OMLLMDO        ',' OMLLMDO        ',' OMLLMDO        ',' OMLLMDO        ',' OMMMMDO        ',' OOOOOOO        '],fiP);
+    var buP={O:'#0d1a22',D:'#223344',M:'#334466',L:'#4466aa',H:'#5577bb',T:'#7799cc'};
+    buildSprite('bubbler',['   OOOO         ','  OTTTDO        ','  OTHTDOO       ','  OTTDOO        ','   OODOO        ','   OMDOO        ','   OLMDO        ','   OLMDO        ','   OLMDO        ','   OLMDO        ','   OLMDO        ','   OLMDO        ','   OLMDO        ','   OLMDO        ','   OLMDO        ','   OOOOO        '],buP);
+    var ldP={O:'#223344',H:'#ffffff',M:'#ddeeff',L:'#aaccff',D:'#6688aa',Y:'#ffff99'};
+    buildSprite('light_bar',['OOOOOOOOOOOOOOOO','ODDDDDDDDDDDDDO ','OMMMMMMMMMMMMMMO','OYHYHYHYHYHYHYHO','OMHHHHHHHHHHHMMO','OOOOOOOOOOOOOOOO','                ','                ','                ','                ','                ','                ','                ','                ','                ','                '],ldP);
+    var gvC=[{O:'#770033',M:'#cc1188',L:'#ee44bb',H:'#ffaadd',D:'#440022',S:'#ff66cc'},{O:'#660044',M:'#bb0077',L:'#dd33aa',H:'#ff88dd',D:'#330033',S:'#ee44bb'},{O:'#880033',M:'#dd1199',L:'#ff55cc',H:'#ffbbee',D:'#550033',S:'#ff77dd'},{O:'#550033',M:'#aa0066',L:'#cc2299',H:'#ff66cc',D:'#330022',S:'#dd55bb'}];
+    ['gravel_0','gravel_1','gravel_2','gravel_3'].forEach(function(k,vi){buildSprite(k,['OMMOSMMOSMMOSMM ','MLLMLLSSLLOMLLM ','LHHLHHLHHLHHLHH ','SHHLSSLHHLHHLSS ','MLLMLLMMLLOMLLO ','OMMOSMMOSMMOSMM ','MLLMLLSSLLOMLLM ','LHHLHHLHHLHHLHH ','SHHLSSLHHLHHLSS ','MLLMLLMMLLOMLLO ','OMMOSMMOSMMOSMM ','MLLMLLSSLLOMLLM ','LHHLHHLHHLHHLHH ','SHHLSSLHHLHHLSS ','MLLMLLMMLLOMLLO ','OMMOSMMOSMMOSMM '],gvC[vi]);});
+  }
+
+  function drawWater(GH){
+    var cols=['#0d3654','#0d3e60','#0c4268','#0b4470','#0a4068','#093858'];
+    for(var i=0;i<cols.length;i++){X.fillStyle=cols[i];X.fillRect(0,Math.round(i*GH/6),W,Math.round(GH/6)+1);}
+    X.fillStyle='rgba(100,200,255,0.04)';
+    for(var cx=0;cx<W;cx+=18){var sh=Math.sin((cx+tick*.8)*.05)*6;X.fillRect(cx,sh,8,GH);}
+  }
+  function drawSurface(){
+    for(var sx=0;sx<W;sx+=4){var wv=Math.sin((sx+tick*1.6)*.06)*4;
+      X.fillStyle='rgba(140,220,255,0.18)';X.fillRect(sx,wv,4,3);
+      X.fillStyle='rgba(80,180,255,0.10)';X.fillRect(sx,wv+3,4,2);}
+  }
+  function drawGravel(GH){
+    for(var gx=0;gx<W;gx+=16*SCALE){
+      var v=Math.floor(gx/(16*SCALE))%4,wob=Math.round(Math.abs(Math.sin(gx*.09))*8);
+      var s=cache['gravel_'+v];if(!s)continue;
+      X.imageSmoothingEnabled=false;X.drawImage(s,0,0,16,16,gx,GH-20-wob,16*SCALE,20+wob+4);
+    }
+  }
+  function drawOrganic(org,GH){
+    if(org<0.3)return;
+    X.fillStyle='rgba(60,30,5,'+Math.min(.5,org/4)+')';X.fillRect(0,GH-22,W,22+(H-GH));
+    if(org>0.6){X.fillStyle='rgba(80,50,10,0.6)';
+      for(var i=0;i<Math.floor(org*8);i++){X.fillRect(((i*137+tick)%W),GH-5-((i*53+tick*.3)%18),2,1);}
+    }
+  }
+  function drawLight(GH){
+    for(var lx=0;lx<W;lx+=16*SCALE){var s=cache['light_bar'];if(s)X.drawImage(s,lx,0,16*SCALE,6*SCALE);}
+    for(var lx2=8;lx2<W-8;lx2+=24){
+      X.fillStyle='rgba(200,235,255,0.05)';X.beginPath();X.moveTo(lx2,18);X.lineTo(lx2-30,GH);X.lineTo(lx2+30,GH);X.closePath();X.fill();
+    }
+  }
+  function drawEquip(GH){
+    var G=AQUA.G;
+    if(G.equip.indexOf('filter')>=0||G.equip.indexOf('hob_filter')>=0){
+      var s=cache['filter'];X.imageSmoothingEnabled=false;
+      if(s)X.drawImage(s,4,Math.round(GH-16*SCALE),16*SCALE,16*SCALE);
+      if(tick%14===0)G.bubbles.push({x:12+Math.random()*10,y:GH-16*SCALE,r:2+Math.random()*3,life:0});
+    }
+    if(G.equip.indexOf('bubbler')>=0){
+      var sb=cache['bubbler'];X.imageSmoothingEnabled=false;
+      if(sb)X.drawImage(sb,W-16*SCALE-4,Math.round(GH-16*SCALE),16*SCALE,16*SCALE);
+      if(tick%8===0)G.bubbles.push({x:W-16*SCALE/2+Math.random()*8,y:GH-16*SCALE,r:1.5+Math.random()*2.5,life:0});
+    }
+  }
+  function drawBubbles(){
+    AQUA.G.bubbles=AQUA.G.bubbles.filter(function(b){return b.y>0&&b.life<140;});
+    AQUA.G.bubbles.forEach(function(b){
+      b.y-=0.7+b.r*.1;b.x+=Math.sin(b.y*.07)*.4;b.life++;
+      var a=Math.max(0,0.7-b.life/140);
+      X.strokeStyle='rgba(180,230,255,'+a+')';X.lineWidth=1.5;
+      X.beginPath();X.arc(b.x,b.y,b.r,0,Math.PI*2);X.stroke();
+      X.fillStyle='rgba(255,255,255,'+(a*.7)+')';
+      X.beginPath();X.arc(b.x-b.r*.3,b.y-b.r*.3,b.r*.3,0,Math.PI*2);X.fill();
+    });
+  }
+  function drawPlants(GH){
+    AQUA.G.plants.forEach(function(p){
+      if(p.type==='fakeplant'){
+        var s=cache['fakeplant'];X.imageSmoothingEnabled=false;
+        if(s)X.drawImage(s,Math.round(p.x-8*SCALE),Math.round(GH-16*SCALE),16*SCALE,16*SCALE);
+      } else if(p.type==='plant'&&p.alive){
+        // All live plants use javafern sprites for now; graphics overhaul replaces this per-species
+        var fronds=Math.min(6,2+Math.floor((p.mass||1)/1.5));
+        var sf=cache['javafern_stem'],ff=cache['javafern_frond'];
+        X.imageSmoothingEnabled=false;
+        if(sf)X.drawImage(sf,Math.round(p.x-8*SCALE),Math.round(GH-16*SCALE),16*SCALE,16*SCALE);
+        for(var i=0;i<fronds;i++){
+          var side=i%2===0?-1:1,fy=GH-16*SCALE-i*8,fx=p.x+(side*4*SCALE);
+          if(ff){X.save();if(side>0){X.translate(fx+8*SCALE,fy);X.scale(-1,1);X.drawImage(ff,-8*SCALE,0,16*SCALE,16*SCALE);}else{X.drawImage(ff,fx,fy,16*SCALE,16*SCALE);}X.restore();}
+        }
+        // Show name + mass label
+        X.fillStyle='rgba(80,255,120,0.8)';X.font='bold 9px monospace';
+        var label=((AQUA.ITEMS[p.key]||{}).name||p.key).slice(0,8);
+        X.fillText(label+' '+(p.mass||0).toFixed(1)+'g',p.x-18,GH-16*SCALE-fronds*8-4);
+      }
+    });
+  }
+  function drawAlgae(GH){
+    var ag=AQUA.G.algae||0;if(ag<0.3)return;
+    var intensity=Math.min(0.65,ag*0.085);
+    X.fillStyle='rgba(40,180,80,'+(intensity*0.45)+')';X.fillRect(0,0,W,GH);
+    X.fillStyle='rgba(120,255,140,'+intensity+')';
+    for(var i=0;i<Math.floor(ag*9+6);i++){
+      var phase=(tick*0.8+i*37)%360,ax=(i*41+tick*1.1)%(W+40)-20,ay=GH-22-Math.sin(phase*Math.PI/180)*28,sz=2+Math.sin(phase*0.3)*1.5;
+      X.fillRect(Math.round(ax),Math.round(ay),Math.round(sz),2);
+    }
+    if(ag>3){X.fillStyle='rgba(30,120,50,'+(intensity*0.6)+')';X.fillRect(0,GH-60,W,60);}
+  }
+  function moveFish(f,GH){
+    f.x+=f.vx;f.y+=f.vy;
+    if(f.x<8){f.vx=Math.abs(f.vx);f.dir=1;}if(f.x>W-8){f.vx=-Math.abs(f.vx);f.dir=-1;}
+    if(f.y<28)f.vy=Math.abs(f.vy);if(f.y>GH-36)f.vy=-Math.abs(f.vy);
+    if(tick%55===Math.floor(f.x*0.3+f.y)%55){
+      f.vx+=(Math.random()-.5)*.6;f.vy+=(Math.random()-.5)*.3;
+      f.vx=Math.max(-2.2,Math.min(2.2,f.vx));f.vy=Math.max(-.9,Math.min(.9,f.vy));
+      f.dir=f.vx>0?1:-1;
+    }
+  }
+  function drawHUD(){
+    var G=AQUA.G;
+    X.fillStyle='rgba(4,2,16,0.88)';X.fillRect(0,0,W,22);
+    X.fillStyle='#cc44ff';X.fillRect(0,22,W,2);
+    X.font='bold 11px monospace';
+    X.fillStyle='#ffdd44';X.fillText('DAY '+G.day,8,15);
+    X.fillStyle='#ff88ff';X.fillText('$'+G.money,88,15);
+    var alive=G.fish.filter(function(f){return f.alive;}).length;
+    X.fillStyle='#88ffaa';X.fillText('Fish: '+alive+'/'+G.fish.length+'  Cleaners: '+G.cleaners.length,180,15);
+    if(G.over){
+      X.fillStyle='rgba(0,0,0,0.75)';X.fillRect(0,0,W,H);
+      var won=alive>0;
+      X.font='bold 22px monospace';X.fillStyle=won?'#44ff88':'#ff3333';
+      var msg=won?'YOU WIN!':'GAME OVER';
+      X.fillText(msg,W/2-X.measureText(msg).width/2,H/2-14);
+      X.font='bold 12px monospace';X.fillStyle='#aaccee';
+      var sub=won?'Closed loop achieved!':'All fish died.';
+      X.fillText(sub,W/2-X.measureText(sub).width/2,H/2+10);
+    }
+  }
+
+  function frame(){
+    if(!C)return;
+    var G=AQUA.G,GH=H-36;
+    X.clearRect(0,0,W,H);
+    drawWater(GH);
+    if(AQUA.FX.hasFlag(G,'hasLight'))drawLight(GH);
+    drawSurface();
+    drawOrganic(G.chem.org,GH);
+    drawAlgae(GH);
+    drawGravel(GH);
+    drawEquip(GH);
+    drawBubbles();
+    drawPlants(GH);
+
+    // Cleaners — use RENDER_ADAPTER
+    G.cleaners.forEach(function(cl){
+      if(!cl.alive)return;
+      if(tick%100===0)cl.x=Math.max(40,Math.min(W-60,cl.x+(Math.random()>.5?12:-12)));
+      AQUA.RENDER_ADAPTER.drawEntity(X,cl,cl.x,H-36-20,tick,cache,SCALE);
+    });
+
+    // Fish — use RENDER_ADAPTER
+    G.fish.forEach(function(f){
+      if(!f.alive)return;
+      moveFish(f,GH);
+      AQUA.RENDER_ADAPTER.drawEntity(X,f,f.x,f.y,tick,cache,SCALE);
+    });
+
+    X.fillStyle='rgba(200,240,255,0.04)';X.fillRect(0,0,4,H);X.fillRect(W-4,0,4,H);
+    X.fillStyle='rgba(4,2,16,0.5)';X.fillRect(0,H-4,W,4);
+    drawHUD();
+    tick++;
+    requestAnimationFrame(frame);
+  }
+
+  return {init:function(canvas){init(canvas);buildAllSprites();},start:frame};
+})();
+
+// ============================================================
+// INTRO
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §UI  —  AQUA.ui — DOM handlers, renderStatus, renderDeltaBreakdown
+// Search handle: §UI
+// ════════════════════════════════════════════════════════════════
+
+// showAchievementToast() — achievement unlock notification
+// toggleDebug() — numeric rates panel
+// PORT NOTE: Replace BUS subscriptions with Blueprint event nodes.
+// renderStatus() -> update UMG TextBlock/ProgressBar widgets directly.
+// ============================================================
+
+AQUA.ui = {
+  _init: function() {
+    AQUA.BUS.on('log',          function(ev){AQUA.ui._log(ev.msg,ev.ltype||ev.type);});
+    AQUA.BUS.on('status_changed',function(){AQUA.ui.renderStatus();AQUA.ui.renderDeltaBreakdown();});
+    AQUA.BUS.on('fish_died',    function(ev){AQUA.ui._log((ev.name||'Fish')+' died!','danger');});
+    AQUA.BUS.on('algae_stress', function(){AQUA.ui._log('Heavy algae stressing fish!','warn');});
+    AQUA.BUS.on('algae_bloom',  function(){AQUA.ui._log('Algae bloom!','warn');});
+    AQUA.BUS.on('disease_new',  function(ev){AQUA.ui._log(ev.fishName+' contracted '+ev.disease+'! Check FISH tab.','danger');});
+    AQUA.BUS.on('disease_warn', function(ev){AQUA.ui._log(ev.fishName+' '+ev.disease+' severity '+(ev.severity*100).toFixed(0)+'% — treat soon!','danger');});
+    AQUA.BUS.on('chem_warn',    function(ev){AQUA.ui._log(ev.param+' '+ev.value.toFixed(2)+' ppm',ev.severe?'danger':'warn');});
+    AQUA.BUS.on('chem_info',    function(ev){AQUA.ui._log(ev.msg,'info');});
+    AQUA.BUS.on('phase_change', function(ev){
+      var msgs={grow_plant:'30 days survived! New goal: Grow a plant',sell_plant:'Plant ready to sell!'};
+      AQUA.ui._log(msgs[ev.phase]||'','ok');
+    });
+    AQUA.BUS.on('game_over',    function(ev){
+      AQUA.ui._log(ev.won?'*** YOU WIN! ***':'*** GAME OVER ***',ev.won?'ok':'danger');
+    });
+    AQUA.BUS.on('status_changed', function(){
+      if(AQUA.panels._active===1) AQUA.panels.drawCharts();
+      if(AQUA.panels._active===3) AQUA.panels.drawFishProfiles();
+      if(AQUA.panels._active===4) AQUA.panels.drawPourbaix();
+      if(AQUA.panels._active===5) AQUA.panels.drawCO2KHpH();
+      if(AQUA.panels._active===6) AQUA.panels.drawDiurnal();
+      if(AQUA.panels._active===7) AQUA.panels.drawRating();
+      if(AQUA.panels._active===7) AQUA.panels.drawRating();
+    });
+  },
+  _log: function(msg,type) {
+    var el=document.getElementById('elog');if(!el)return;
+    var col=type==='ok'?'#00cc44':type==='warn'?'#ffaa00':type==='danger'?'#ff3333':'#4499ff';
+    var d=document.createElement('div');d.style.color=col;
+    d.textContent='[Day '+AQUA.G.day+'] '+msg;
+    el.appendChild(d); el.scrollTop=el.scrollHeight;
+    while(el.children.length>80)el.removeChild(el.firstChild);
+  },
+  toggleDebug: function() {
+    AQUA.G.debug=document.getElementById('debug-toggle').checked;
+    var p=document.getElementById('debug-panel');
+    p.style.display=AQUA.G.debug?'block':'none';
+    if(AQUA.G.debug)AQUA.ui.renderStatus();
+  },
+  renderStatus: function() {
+    var G=AQUA.G,c=G.chem,el;
+    if((el=document.getElementById('day-num')))   el.textContent=G.day;
+    if((el=document.getElementById('money-num'))) el.textContent=G.money;
+    var phases={survive:'Survive 30 days',grow_plant:'Grow a plant 50%',sell_plant:'Sell your plant!'};
+    if((el=document.getElementById('phase-txt'))) el.textContent=phases[G.phase]||'';
+
+    var totalSurf=AQUA.SIM.getTotalSurf(G);
+    var stats=[
+      {label:'pH',   val:c.ph.toFixed(1),        pct:(c.ph-5)/4,    ok:c.ph>=6.5&&c.ph<=8,   warn:c.ph<6||c.ph>8.5,   unit:''},
+      {label:'NH3',  val:c.nh3.toFixed(2),        pct:c.nh3,         ok:c.nh3<.1,             warn:c.nh3>.3,            unit:'ppm'},
+      {label:'NO2',  val:c.no2.toFixed(2),        pct:c.no2/2,       ok:c.no2<.2,             warn:c.no2>.6,            unit:'ppm'},
+      {label:'NO3',  val:c.no3.toFixed(1),        pct:c.no3/80,      ok:c.no3<20,             warn:c.no3>50,            unit:'ppm'},
+      {label:'PO4',  val:c.po4.toFixed(2),        pct:c.po4/2,       ok:c.po4<.5,             warn:c.po4>1.2,           unit:'ppm'},
+      {label:'O2',   val:c.o2.toFixed(1),         pct:c.o2/10,       ok:c.o2>6,               warn:c.o2<4,              unit:'ppm'},
+      {label:'CO2',  val:c.co2.toFixed(1),        pct:c.co2/30,      ok:true,                 warn:c.co2>20,            unit:'ppm'},
+      {label:'Waste',val:c.org.toFixed(2),        pct:c.org/3,       ok:c.org<.3,             warn:c.org>.8,            unit:''},
+      {label:'Algae',val:(G.algae||0).toFixed(1), pct:(G.algae||0)/8,ok:(G.algae||0)<2,       warn:(G.algae||0)>4,      unit:'g'},
+      {label:'Surf', val:Math.round(totalSurf),   pct:totalSurf/400, ok:totalSurf>120,        warn:totalSurf<40,        unit:'cm²'},
+      {label:'Bact', val:(c.bact*100).toFixed(0), pct:c.bact,        ok:c.bact>.4,            warn:c.bact<.1,           unit:'%'},
+      {label:'KH',   val:(c.kh||0).toFixed(1),     pct:(c.kh||0)/12,  ok:(c.kh||0)>=3,         warn:(c.kh||0)<1.5,       unit:'dKH'},
+      {label:'GH',   val:(c.gh||0).toFixed(1),     pct:(c.gh||0)/20,  ok:(c.gh||0)>=4,          warn:(c.gh||0)<2,         unit:'dGH'}
+    ];
+    var grid=document.getElementById('chem-grid');
+    if(grid){grid.innerHTML='';stats.forEach(function(s){
+      var col=s.warn?'#ff4444':s.ok?'#00ff44':'#ffee44';
+      var barCol=s.warn?'#cc2222':s.ok?'#00aa44':'#aaaa00';
+      var pct=Math.min(100,Math.max(0,s.pct*100));
+      grid.innerHTML+='<div style="background:#0a0520;border:1px solid #330055;padding:3px 4px;text-align:center">'+
+        '<div style="font-size:8px;color:#886699;margin-bottom:1px">'+s.label+'</div>'+
+        '<div style="font-size:11px;color:'+col+'">'+s.val+' <span style="font-size:8px;color:#556677">'+s.unit+'</span></div>'+
+        '<div style="height:3px;background:#111;margin-top:2px"><div style="height:100%;width:'+pct+'%;background:'+barCol+'"></div></div>'+
+        '</div>';
+    });}
+
+    var redox=AQUA.SIM.redoxScore(G);
+    var rf=document.getElementById('redox-fill'),rl=document.getElementById('redox-label');
+    if(rf&&rl){
+      rf.style.width=(redox*100).toFixed(0)+'%';
+      rf.style.background=redox>.7?'#228833':redox>.4?'#888800':redox>.2?'#884400':'#880000';
+      rl.textContent=redox>.7?'OXIDIZED — healthy':redox>.4?'OK — watch O2':redox>.2?'WARNING — change water':'DANGER — TOXIC!';
+      rl.style.color=redox>.5?'#ccffcc':'#ffcccc';
+    }
+
+    var fd=AQUA.SIM.calcDeltas(c,false,G);
+    var fstats=[
+      {label:'NH3',d:fd.nh3},{label:'NO2',d:fd.no2},{label:'NO3',d:fd.no3},
+      {label:'PO4',d:fd.po4},{label:'O2',d:fd.o2},{label:'CO2',d:fd.co2},{label:'Waste',d:fd.org}
+    ];
+    var fr=document.getElementById('forecast-row');
+    if(fr){fr.innerHTML='';fstats.forEach(function(fs){
+      var pos=fs.d>.005,neg=fs.d<-.005;
+      var bad=(fs.label==='NH3'||fs.label==='NO2'||fs.label==='Waste'||fs.label==='PO4')&&pos;
+      var good=fs.label==='O2'&&pos;
+      var col=bad?'#ff3333':good?'#00ff88':pos?'#ff8844':neg?'#44ff88':'#446688';
+      fr.innerHTML+='<div style="background:#0a0520;border:1px solid '+(bad?'#660000':good?'#004400':'#221133')+
+        ';padding:2px 5px;font-size:9px;color:'+col+'">'+fs.label+' '+(pos?'+':'')+fs.d.toFixed(2)+
+        ' <b>'+(pos?'UP':neg?'DOWN':'STABLE')+'</b></div>';
+    });}
+
+    // T1-C: Cycling phase UI
+    var cp=document.getElementById('cycling-panel');
+    if(cp){
+      var isCycling=(G.day<30&&G.chem.bact<0.4);
+      if(isCycling){
+        var pct=Math.min(100,Math.round((G.chem.bact/0.4)*100));
+        var filled=Math.round(pct/10), empty=10-filled;
+        var barStr='['+('='.repeat(filled))+('-'.repeat(empty))+'] '+pct+'%';
+        var stageMsg='';
+        if(G.chem.bact<0.1) stageMsg='Seeding bacteria...';
+        else if(G.chem.bact<0.2) stageMsg='Nitrosomonas colonizing — NH3 spike coming!';
+        else if(G.chem.bact<0.3) stageMsg='Nitrobacter establishing — NO2 may spike';
+        else stageMsg='Nearly cycled — NH3 and NO2 dropping';
+        cp.innerHTML='<div style="background:#0a0510;border:1px solid #553300;padding:4px 6px;border-radius:3px">'+
+          '<div style="font-size:8px;color:#ff8800;letter-spacing:1px;margin-bottom:2px">⚠ NEW TANK CYCLING</div>'+
+          '<div style="font-size:9px;color:#ffaa44;font-family:monospace">CYCLING PROGRESS '+barStr+'</div>'+
+          '<div style="font-size:8px;color:#aa7744;margin-top:1px">'+stageMsg+'</div>'+
+          '</div>';
+      } else {
+        cp.innerHTML='';
+      }
+    }
+
+    if(G.debug){
+      var p=document.getElementById('debug-panel');
+      if(p)p.innerHTML='NH3Δ: '+(fd.nh3||0).toFixed(3)+
+        ' | NO3Δ: '+(fd.no3||0).toFixed(3)+
+        ' | Surf: '+AQUA.SIM.getTotalSurf(G).toFixed(0)+'cm²'+
+        ' | Redox: '+(AQUA.SIM.redoxScore(G)*100).toFixed(0)+'%'+
+        ' | History: '+(G.chemHistory||[]).length+' days';
+    }
+  },
+
+  // ── Delta breakdown — "what's changing and why" ───────────────────────
+  // PORT NOTE: pure data read from SIM.calcDeltas(). No renderer coupling.
+  // In Unreal, pipe the same breakdown struct to a ScrollBox of label rows.
+  renderDeltaBreakdown: function() {
+    var el = document.getElementById('delta-breakdown'); if(!el)return;
+    var G = AQUA.G; if(!G)return;
+    var c = G.chem;
+    var isNight = G.timeOfDay === 'night';
+    var sched = G.lightSchedule || {};
+    var lightOn = AQUA.FX.hasFlag(G,'hasLight') && !(isNight && sched.lightOff);
+    var co2On   = AQUA.FX.hasFlag(G,'hasCO2')   && !(isNight && sched.co2Off);
+    var tf = Math.pow(2,(c.temp-76)/10);
+    var totalSurf = AQUA.SIM.getTotalSurf(G);
+    var surfAgitation = (AQUA.FX.hasFlag(G,'hasFilter')||AQUA.FX.hasFlag(G,'hasHOB')) ? 0.08
+                      : AQUA.FX.hasFlag(G,'hasBubbler') ? 0.12 : 0.02;
+    var surfScale = Math.min(2.0, (totalSurf + G.surf) / 200);
+    var no3Factor = Math.min(1, c.no3/10);
+    var lightLevel = lightOn ? 1.0 : (isNight ? 0.0 : 0.15);
+    var co2Boost = Math.max(0.3, Math.min(2.0, c.co2/8));
+
+    var rows = [];
+
+    function row(label, co2d, o2d, note, warn) {
+      rows.push({label:label, co2d:co2d, o2d:o2d, note:note||'', warn:!!warn});
+    }
+
+    // Fish
+    var fishCO2 = 0, fishO2 = 0;
+    G.fish.forEach(function(f){
+      if(!f.alive)return;
+      var it=AQUA.ITEMS[f.key]||{};
+      fishCO2 += (it.co2p||0)*f.mass*tf;
+      fishO2  -= (it.o2c||0)*f.mass*tf;
+    });
+    if(fishCO2)row('Fish respiration', +fishCO2, fishO2, G.fish.filter(f=>f.alive).length+' fish × mass × Q10', fishCO2>1);
+
+    // Plants
+    var plantCO2=0, plantO2=0;
+    G.plants.forEach(function(p){
+      if(p.type!=='plant'||!p.key)return;
+      var it=AQUA.ITEMS[p.key]||{};
+      if(lightLevel<(it.lightNeeded||0.2))return;
+      var eff=lightLevel*no3Factor;
+      var act=eff*co2Boost;
+      plantCO2 -= (it.co2c||0)*p.mass*act;
+      plantO2  += (it.o2p||0)*p.mass*act;
+    });
+    if(G.plants.some(function(p){return p.type==='plant';})){
+      var eff=lightLevel*no3Factor;
+      var act=eff*co2Boost;
+      var effPct=Math.round(eff*100), boostPct=Math.round(co2Boost*100);
+      row('Plant photosynthesis', plantCO2, plantO2,
+        'eff='+effPct+'% light×NO3 | CO2 boost='+boostPct+'% (CO2='+c.co2.toFixed(1)+'ppm)',
+        plantCO2>0.01);
+      if(!lightOn) rows[rows.length-1].note += ' [LIGHTS OFF]';
+    }
+
+    // Gas exchange
+    var co2OutgasRate = -(c.co2-0.5)*surfAgitation*surfScale;
+    var o2GasExch = (9-c.o2)*0.05;
+    row('Surface gas exchange',
+      co2OutgasRate, o2GasExch,
+      'CO2 outgassing '+(surfAgitation*100).toFixed(0)+'% rate | O2 pulls to 9ppm',
+      co2OutgasRate > 0);
+
+    // CO2 injector
+    if(co2On){
+      row('CO2 injector', +3.5, 0, 'Running — timer is OFF', true);
+    } else if(AQUA.FX.hasFlag(G,'hasCO2')) {
+      row('CO2 injector', 0, 0, 'Timer ON — off at night');
+    }
+
+    // Bubbler / equipment O2
+    if(AQUA.FX.hasFlag(G,'hasBubbler')){
+      row('Bubbler', 0, +1.2, 'Surface agitation (CO2 outgassing handled above)');
+    }
+
+    // Decomposition → CO2/NH3
+    var decomp = c.org*0.15;
+    var decompCO2 = decomp*0.2; // partial — rest goes to NH3
+    if(c.org>0.1) row('Waste decomp', +decompCO2, 0, 'Organic waste='+c.org.toFixed(2)+' | →NH3+CO2', c.org>0.5);
+
+    // Nitrification bacteria O2 draw
+    var bactMult = AQUA.FX.hasFlag(G,'hasFilter')||AQUA.FX.hasFlag(G,'hasHOB') ? 1.6 : 1;
+    var bact = c.bact*bactMult*(Math.min(3.0,totalSurf/100)+0.012*(totalSurf/100));
+    var n1 = bact*0.25*(c.nh3/(c.nh3+0.3));
+    if(n1>0.001) row('Nitrification bacteria', 0, -(n1*0.5), 'NH3→NO2→NO3 (bact='+Math.round(c.bact*100)+'%)', false);
+
+    // Net summary
+    var netCO2 = rows.reduce(function(s,r){return s+r.co2d;},0);
+    var netO2  = rows.reduce(function(s,r){return s+r.o2d;},0);
+
+    // Render
+    var html = '';
+    rows.forEach(function(r){
+      var c2col = r.co2d>0.005?'#ff7744':r.co2d<-0.005?'#44ffcc':'#445566';
+      var o2col = r.o2d>0.005?'#44ffcc':r.o2d<-0.005?'#ff7744':'#445566';
+      var c2str = r.co2d===0?'—':(r.co2d>0?'+':'')+r.co2d.toFixed(3);
+      var o2str = r.o2d===0?'—':(r.o2d>0?'+':'')+r.o2d.toFixed(3);
+      html += '<div style="display:flex;gap:6px;border-bottom:1px solid #110022;padding:1px 0'+(r.warn?';background:#1a0008':'')+'">'+
+        '<span style="color:#aa88cc;min-width:130px">'+r.label+'</span>'+
+        '<span style="color:'+c2col+';min-width:56px">CO2'+c2str+'</span>'+
+        '<span style="color:'+o2col+';min-width:56px">O2 '+o2str+'</span>'+
+        '<span style="color:#446677;font-size:8px">'+r.note+'</span>'+
+        '</div>';
+    });
+
+    var netC2col = netCO2>0.01?'#ff4444':netCO2<-0.01?'#44ffcc':'#888888';
+    var netO2col = netO2>0.01?'#44ffcc':netO2<-0.01?'#ff4444':'#888888';
+    html += '<div style="display:flex;gap:6px;padding:2px 0;border-top:1px solid #330055;margin-top:1px">'+
+      '<span style="color:#ffaaff;min-width:130px;font-weight:bold">NET / TICK</span>'+
+      '<span style="color:'+netC2col+';min-width:56px;font-weight:bold">CO2'+(netCO2>0?'+':'')+netCO2.toFixed(3)+'</span>'+
+      '<span style="color:'+netO2col+';min-width:56px;font-weight:bold">O2 '+(netO2>0?'+':'')+netO2.toFixed(3)+'</span>'+
+      '<span style="color:#446677;font-size:8px">ppm/tick'+(isNight?' [NIGHT]':'')+'</span>'+
+      '</div>';
+    el.innerHTML = html;
+  },
+
+  showAchievementToast: function(ach) {
+    var el = document.getElementById('ach-toast'); if(!el)return;
+    el.style.display = 'block';
+    el.innerHTML = ach.icon+' <b>ACHIEVEMENT UNLOCKED:</b> '+ach.name+' — <span style="color:#88ffaa">'+ach.desc+'</span>';
+    clearTimeout(AQUA.ui._achTimer);
+    AQUA.ui._achTimer = setTimeout(function(){ el.style.display='none'; }, 6000);
+  },
+  _achTimer: null,
+
+  buildChemTable: function() {
+    var FISH_ITEMS=Object.keys(AQUA.ITEMS).filter(function(k){return AQUA.ITEMS[k].type==='fish';});
+    var rows=[
+      {label:'Fish (general)',no2:'',no3:'',co2:'+',o2:'-',fw:'+',ff:'-'},
+      {label:'Shrimp',       no2:'+',no3:'+',co2:'+',o2:'-',fw:'-',ff:''},
+      {label:'Snail',        no2:'+',no3:'+',co2:'+',o2:'-',fw:'-',ff:''},
+      {label:'Plant',        no2:'',no3:'-',co2:'-',o2:'+',fw:'',ff:''},
+      {label:'Bacteria',     no2:'+',no3:'+',co2:'+',o2:'-',fw:'-',ff:''},
+      {label:'Bubbler',      no2:'',no3:'',co2:'-',o2:'+',fw:'',ff:''},
+      {label:'Filter/HOB',   no2:'-',no3:'',co2:'',o2:'+',fw:'-',ff:''},
+      {label:'CO2 Injector', no2:'',no3:'',co2:'+',o2:'',fw:'',ff:''},
+      {label:'UV Sterilizer',no2:'',no3:'',co2:'',o2:'',fw:'-',ff:''},
+      {label:'H2O Change',   no2:'-',no3:'-',co2:'-',o2:'+',fw:'-',ff:''}
+    ];
+    var cols=['no2','no3','co2','o2','fw','ff'];
+    var hdrs=['Entity','NO2','NO3','CO2','O2','Waste','Food'];
+    var t=document.getElementById('ctab');if(!t)return;
+    var th='<tr>'+hdrs.map(function(h,i){return'<th style="background:#1a0030;color:#ffaaff;padding:3px;border:1px solid #330055;font-size:9px;font-weight:normal;'+(i===0?'text-align:left':'text-align:center')+'">'+h+'</th>';}).join('')+'</tr>';
+    var tb=rows.map(function(r){
+      var cells=cols.map(function(col){var v=r[col];var vc=v==='+'?'#00ee55':v==='-'?'#ff3333':'#333344';
+        return'<td style="border:1px solid #220033;padding:3px;text-align:center;color:'+vc+';font-size:11px">'+(v==='+'?'+':v==='-'?'−':'·')+'</td>';}).join('');
+      return'<tr><td style="border:1px solid #220033;padding:3px 5px;color:#cc88ff;font-size:9px;white-space:nowrap">'+r.label+'</td>'+cells+'</tr>';
+    }).join('');
+    t.innerHTML=th+tb;
+  }
+};
+
+// ============================================================
+// AQUA.SHOP — Categorized store
+// ============================================================
+// ============================================================
+// AQUA.COMPAT — Fish compatibility checker
+// PORT NOTE: pure data lookup. In Unreal, call from purchase
+// confirmation dialog before committing the buy. Same logic,
+// different UI wrapper. ITEMS data is identical on both sides.
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §SHOP  —  AQUA.shop — Store UI: buy/sell panels, category tabs
+// Search handle: §SHOP
+// ════════════════════════════════════════════════════════════════
+
+// buy() logic is portable — same ITEMS data, same FX calls.
+// ============================================================
+
+AQUA.shop = {
+  _cat: 'fish',
+  open:  function(){if(AQUA.G&&!AQUA.G.over){document.getElementById('store').style.display='block';AQUA.shop.build();}},
+  close: function(){document.getElementById('store').style.display='none';AQUA.actions.advanceDay();},
+  build: function(){document.getElementById('sbal').textContent=AQUA.G.money;AQUA.shop._buys();AQUA.shop._sells();},
+  showCat: function(cat){
+    AQUA.shop._cat=cat;
+    document.querySelectorAll('.store-tab').forEach(function(b,i){
+      b.classList.toggle('active',b.textContent.toLowerCase()===cat||(cat==='other'&&b.textContent==='OTHER'));
+    });
+    AQUA.shop._buys();
+  },
+  _catFor: function(type){ return type==='fish'?'fish':type==='cleaner'?'cleaner':type==='plant'?'plant':type==='equip'?'equip':'other'; },
+  _buys: function() {
+    var el=document.getElementById('sitems');if(!el)return;el.innerHTML='';
+    var cat=AQUA.shop._cat;
+    Object.keys(AQUA.ITEMS).forEach(function(key){
+      var d=AQUA.ITEMS[key];
+      if(AQUA.shop._catFor(d.type)!==cat)return;
+      var owned=d.type==='equip'&&AQUA.G.equip.indexOf(key)>=0;
+      var canBuy=AQUA.G.money>=d.cost&&!owned;
+      var attrs=d.attrs||[];
+      var ah=attrs.map(function(a){var c=a[0]==='+'?'#00ee55':a[0]==='-'?'#ff3333':'#aaaaaa';
+        return'<span style="color:'+c+';display:block;font-size:9px">'+a+'</span>';}).join('');
+      // Compatibility check for fish and cleaners
+      var compatWarns = (d.type==='fish'||d.type==='cleaner') ? AQUA.COMPAT.check(key,AQUA.G) : [];
+      var hasDanger = compatWarns.some(function(w){return w.level==='danger';});
+      var borderCol = hasDanger ? '#aa0000' : compatWarns.length ? '#885500' : '#441166';
+      var div=document.createElement('div');
+      div.style.cssText='background:#050215;border:2px solid '+borderCol+';padding:6px;font-family:monospace';
+      div.innerHTML='<div style="font-size:11px;color:#ffddff;margin-bottom:2px">'+d.name+'</div>'+
+        '<div style="font-size:9px;color:#aa88cc;margin-bottom:3px">'+d.desc+'</div>'+
+        '<div style="font-size:9px;color:#ffaa44;margin-bottom:4px">$'+d.cost+'</div>'+
+        '<div style="margin-bottom:5px">'+ah+'</div>'+
+        (compatWarns.length ? '<div style="margin-bottom:5px;border-top:1px solid #330033;padding-top:3px">'+AQUA.COMPAT.html(compatWarns)+'</div>' : '')+
+        '<button onclick="AQUA.shop.buyKey(this)" data-key="'+key+'" '+(canBuy?'':'disabled')+
+        ' style="font-family:monospace;font-size:9px;padding:3px 8px;background:'+(canBuy?(hasDanger?'#1a0000':'#001800'):'#111')+
+        ';border:2px solid '+(canBuy?(hasDanger?'#aa0000':'#00aa00'):'#333')+';color:'+(canBuy?(hasDanger?'#ff6644':'#00ff44'):'#555')+
+        ';cursor:'+(canBuy?'pointer':'default')+'">'+(owned?'OWNED':(hasDanger?'⚠ BUY':'BUY'))+'</button>';
+      el.appendChild(div);
+    });
+  },
+  _sells: function() {
+    var sellable=AQUA.G.plants.filter(function(p){return p.type==='plant'&&p.mass>=(AQUA.ITEMS[p.key]||{mass:3}).mass*1.3;});
+    var sec=document.getElementById('sell-section'),si=document.getElementById('sell-items');
+    if(!sec||!si)return;si.innerHTML='';
+    if(!sellable.length){sec.style.display='none';return;}
+    sec.style.display='block';
+    sellable.forEach(function(p){
+      var price=Math.round(p.mass*2),idx=AQUA.G.plants.indexOf(p);
+      var div=document.createElement('div');
+      div.style.cssText='display:flex;justify-content:space-between;align-items:center;background:#001800;border:1px solid #225522;padding:4px 6px;margin-bottom:3px;font-size:10px;color:#88ffaa';
+      div.innerHTML=((AQUA.ITEMS[p.key]||{}).name||p.key)+' ('+p.mass.toFixed(1)+'g) — $'+price+
+        ' <button onclick="AQUA.actions.sellPlant(AQUA.G.plants['+idx+'])"'+
+        ' style="font-family:monospace;font-size:9px;padding:3px 8px;background:#003300;border:2px solid #00aa00;color:#00ff44;cursor:pointer">SELL</button>';
+      si.appendChild(div);
+    });
+  },
+  buyKey: function(btn) { AQUA.shop.buy(btn.getAttribute('data-key')); },
+  buy: function(key) {
+    var G=AQUA.G, d=AQUA.ITEMS[key]; if(!d)return;
+    if(G.money<d.cost){AQUA.BUS.emit('log',{msg:'Not enough money!',type:'danger'});return;}
+    G.money-=d.cost;
+    if(d.type==='fish')
+      G.fish.push(AQUA.makeFish(key,100+Math.random()*400,80+Math.random()*120));
+    else if(d.type==='cleaner')
+      G.cleaners.push(AQUA.makeCleaner(key,80+Math.random()*450));
+    else if(d.type==='plant')
+      G.plants.push({key:key,type:'plant',alive:true,mass:d.mass||2,x:80+G.plants.length*90,y:0});
+    else if(d.type==='decor')
+      G.plants.push({type:'fakeplant',x:80+G.plants.length*80,y:0,color:'#ff44cc'});
+    else if(d.type==='equip'&&G.equip.indexOf(key)<0){
+      G.equip.push(key); AQUA.FX.applyInstall(d.onInstall,G);
+    }
+    else if(d.type==='consumable') AQUA.FX.applyUse(d.onUse,G);
+    else if(d.type==='substrate')  AQUA.FX.applyInstall(d.onInstall,G);
+    AQUA.BUS.emit('log',{msg:'Bought '+d.name+' -$'+d.cost,type:'ok'});
+    AQUA.shop.build(); AQUA.BUS.emit('status_changed'); AQUA.ui.buildChemTable();
+  }
+};
+
+// ============================================================
+// AQUA.RENDERER — Canvas pixel art renderer
+// Uses RENDER_ADAPTER for all entity drawing.
+// PORT NOTE: entire RENDERER block is deleted on Unreal port.
+// Frame loop logic (move fish, draw water/gravel/plants) maps to
+// Actor Tick functions and Niagara particle systems.
+// ============================================================
+
+
+// ════════════════════════════════════════════════════════════════
+// §INTRO  —  AQUA.intro — Intro screen builder and game bootstrap
+// Search handle: §INTRO
+// ════════════════════════════════════════════════════════════════
+
+// ============================================================
+
+AQUA.intro = {
+  build: function() {
+    var el=document.getElementById('intro');if(!el)return;
+    el.innerHTML=
+      '<div style="background:#0a0d20;border:3px solid #44aaff;padding:14px;max-width:680px;margin:0 auto">'+
+      '<div style="text-align:center;font-size:15px;color:#44ddff;letter-spacing:2px;margin-bottom:10px">~ AQUA SIM v0.5 — THE LIVING TANK ~</div>'+
+      '<div style="font-size:11px;color:#aaccee;line-height:1.9;margin-bottom:8px">A real aquarium simulation. Every chemical cycle, every bacterial colony, every breath of every fish is modelled.</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+      '<div style="background:#0a0520;border:1px solid #330055;padding:6px;font-size:9px;color:#aaccee">'+
+        '<div style="color:#ffdd66;margin-bottom:3px">NITROGEN CYCLE</div>'+
+        'Fish waste → NH3 → bacteria → NO2 → more bacteria → NO3 → plants absorb. Keep bacteria colonies strong with a filter.</div>'+
+      '<div style="background:#0a0520;border:1px solid #330055;padding:6px;font-size:9px;color:#aaccee">'+
+        '<div style="color:#ffdd66;margin-bottom:3px">ALGAE BLOOMS</div>'+
+        'Excess NO3 + PO4 + light = algae explosion. Plants compete. Shrimp eat algae. UV sterilizer kills suspended algae.</div>'+
+      '<div style="background:#0a0520;border:1px solid #330055;padding:6px;font-size:9px;color:#aaccee">'+
+        '<div style="color:#ffdd66;margin-bottom:3px">REDOX HEALTH</div>'+
+        'Tank redox = ratio of oxidizing vs reducing conditions. High O2 + low NH3/waste = oxidized = safe. Watch the bar.</div>'+
+      '<div style="background:#0a0520;border:1px solid #330055;padding:6px;font-size:9px;color:#aaccee">'+
+        '<div style="color:#ffdd66;margin-bottom:3px">GENETICS (PREVIEW)</div>'+
+        'Every fish has color/trait genes. Breeding will blend them. Check the FISH tab to see gene profiles.</div>'+
+      '</div>'+
+      '<div style="text-align:center;font-size:10px;color:#88aacc;margin-bottom:10px">GOAL 1: Keep fish alive 30 days &nbsp;|&nbsp; GOAL 2: Grow &amp; sell a plant</div>'+
+      '<div style="text-align:center"><button onclick="AQUA.intro.dismiss()" style="font-family:monospace;font-size:13px;padding:10px 28px;background:#003300;border:3px solid #00cc00;color:#00ff44;cursor:pointer">START GAME</button></div>'+
+      '</div>';
+  },
+  dismiss: function() {
+    document.getElementById('intro').style.display='none';
+    document.getElementById('game').style.display='block';
+    AQUA.initState();
+    AQUA.ui._init();
+    AQUA.ui.renderStatus();
+    AQUA.ui.buildChemTable();
+    AQUA.ui.renderDeltaBreakdown();
+    AQUA.BUS.emit('log',{msg:'Tank ready. Check the CHEMISTRY tab after a few days.',type:'info'});
+    AQUA.BUS.emit('log',{msg:'FISH tab shows each inhabitant\'s gene profile.',type:'ok'});
+    AQUA.renderer.start();
+  }
+};
+
+window.addEventListener('load',function(){
+  AQUA.renderer.init(document.getElementById('gc'));
+  AQUA.intro.build();
+});
+
+</script>
+</body>
+</html>
