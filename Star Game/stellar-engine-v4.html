@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stellar Engine Archetype — Teaching Simulator v4</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#05080f;--bg2:#090d1a;--bg3:#0d1220;--panel:#0f1524;--panel2:#151d30;
+  --border:#1a2640;--border2:#243450;
+  --text:#dde6f5;--text2:#7a90b8;--text3:#3d5070;
+  --gold:#f0c040;--orange:#ff7c30;--cyan:#30c8f0;--blue:#4a8af0;
+  --purple:#a060f0;--red:#f04848;--green:#40c870;--teal:#20c090;--amber:#f0a020;
+  --sw:290px;--hh:52px;--fh:36px;
+}
+body{font-family:'Space Mono',monospace;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;
+  display:grid;grid-template-rows:var(--hh) 1fr var(--fh);grid-template-columns:var(--sw) 1fr;
+  grid-template-areas:"hdr hdr" "side main" "ftr ftr";}
+
+/* HEADER */
+.hdr{grid-area:hdr;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;gap:8px;}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:14px;letter-spacing:2.5px;color:var(--gold);}
+.logo small{color:var(--text3);font-size:8px;font-weight:400;display:block;letter-spacing:2px;margin-top:1px;}
+.hcontrols{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.pill{font-family:'Syne',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:3px 10px;border-radius:20px;border:1px solid;}
+.p-ms{border-color:rgba(74,138,240,.5);color:var(--blue);background:rgba(74,138,240,.08);}
+.p-giant{border-color:rgba(255,124,48,.5);color:var(--orange);background:rgba(255,124,48,.08);}
+.p-wr{border-color:rgba(160,96,240,.5);color:var(--purple);background:rgba(160,96,240,.08);}
+.p-sn{border-color:rgba(240,72,72,.5);color:var(--red);background:rgba(240,72,72,.08);}
+.p-lbv{border-color:rgba(240,192,64,.5);color:var(--gold);background:rgba(240,192,64,.08);}
+.p-wd{border-color:rgba(32,192,144,.5);color:var(--teal);background:rgba(32,192,144,.08);}
+.p-ns{border-color:rgba(48,200,240,.5);color:var(--cyan);background:rgba(48,200,240,.08);}
+.p-bh{border-color:rgba(80,80,80,.5);color:#888;background:rgba(40,40,40,.3);}
+.p-bd{border-color:rgba(120,80,40,.5);color:#c08050;background:rgba(80,40,10,.2);}
+.p-pi{border-color:rgba(255,40,40,.8);color:#ff4444;background:rgba(255,20,20,.15);animation:pulse .6s ease-in-out infinite alternate;}
+.btn{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;}
+.btn:hover{border-color:var(--gold);color:var(--gold);}
+.btn.on{background:var(--gold);color:var(--bg);border-color:var(--gold);}
+
+/* SIDEBAR */
+.side{grid-area:side;background:var(--panel);border-right:1px solid var(--border);overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;scrollbar-width:thin;scrollbar-color:var(--border2) transparent;}
+.side::-webkit-scrollbar{width:4px}.side::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.sbs{padding:11px 13px;border-bottom:1px solid var(--border);}
+.sbl{font-family:'Syne',sans-serif;font-size:8px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--text3);margin-bottom:9px;}
+
+/* NEBULA POOL HUD */
+.nebula-hud{background:linear-gradient(135deg,rgba(30,15,60,.6),rgba(15,20,40,.8));border:1px solid rgba(160,96,240,.3);border-radius:8px;padding:9px 11px;margin-bottom:0;}
+.nebula-title{font-family:'Syne',sans-serif;font-size:8px;font-weight:700;letter-spacing:2px;color:var(--purple);text-transform:uppercase;margin-bottom:7px;}
+.nebula-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:7px;}
+.nebula-cell{background:rgba(0,0,0,.3);border:1px solid rgba(160,96,240,.2);border-radius:5px;padding:5px 7px;}
+.nebula-label{font-size:7px;letter-spacing:1px;color:rgba(160,96,240,.7);font-family:'Syne',sans-serif;font-weight:700;text-transform:uppercase;margin-bottom:2px;}
+.nebula-val{font-size:11px;font-weight:700;font-family:'Syne',sans-serif;color:var(--purple);}
+.nebula-bar-wrap{margin-bottom:5px;}
+.nebula-bar-label{display:flex;justify-content:space-between;font-size:8px;color:var(--text3);margin-bottom:2px;}
+.nebula-bar{height:5px;background:var(--border);border-radius:3px;overflow:hidden;}
+.nebula-bar-fill{height:100%;background:linear-gradient(to right,var(--purple),var(--cyan));border-radius:3px;transition:width .4s;}
+.death-collector{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;}
+.dc-badge{font-size:11px;opacity:.2;transition:opacity .4s,transform .2s;cursor:help;position:relative;}
+.dc-badge.earned{opacity:1;transform:scale(1.1);}
+.dc-badge:hover::after{content:attr(data-tip);position:fixed;left:300px;z-index:9999;background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-size:9px;color:var(--text);max-width:200px;line-height:1.5;pointer-events:none;white-space:normal;}
+
+/* SLIDERS */
+.sr{margin-bottom:11px;}
+.sh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
+.sn{font-size:10px;color:var(--text2);}
+.sv{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--gold);}
+input[type=range]{width:100%;height:2px;background:var(--border2);outline:none;border:none;-webkit-appearance:none;cursor:pointer;border-radius:1px;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--gold);cursor:pointer;border:2px solid var(--bg);}
+
+/* STATS */
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.sc{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 7px;}
+.sl{font-size:8px;letter-spacing:1.5px;color:var(--text3);font-family:'Syne',sans-serif;font-weight:700;text-transform:uppercase;margin-bottom:2px;}
+.sv2{font-size:11px;font-weight:700;font-family:'Syne',sans-serif;color:var(--cyan);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* TABS */
+.tabs{display:flex;gap:4px;flex-wrap:wrap;}
+.tab{font-family:'Syne',sans-serif;font-size:9px;font-weight:700;letter-spacing:1px;padding:4px 9px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s;}
+.tab:hover{color:var(--text2);}
+.tab.on{background:var(--gold);color:var(--bg);border-color:var(--gold);}
+
+/* GLOSSARY TOOLTIP */
+.g{border-bottom:1px dashed var(--text3);cursor:help;position:relative;}
+.g:hover::after{content:attr(data-tip);position:fixed;left:300px;top:auto;z-index:9999;background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:7px 10px;font-size:10px;color:var(--text);max-width:240px;line-height:1.5;pointer-events:none;white-space:normal;font-style:normal;}
+
+/* LEGEND */
+.li{display:flex;align-items:flex-start;gap:6px;margin-bottom:5px;font-size:10px;color:var(--text2);line-height:1.4;}
+.ld{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:2px;}
+
+/* EQ BLOCKS */
+.eqb{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 9px;margin-bottom:5px;font-size:10px;}
+.eqf{color:var(--gold);font-size:11px;margin-bottom:2px;}
+.eqs{color:var(--teal);font-size:10px;margin-bottom:1px;}
+.eqn{color:var(--text3);font-size:9px;}
+
+/* WIEN INDICATOR */
+.wien-bar{height:10px;border-radius:3px;margin:6px 0 2px;background:linear-gradient(to right,#8000ff,#4000ff,#0000ff,#0080ff,#00ffff,#00ff00,#ffff00,#ff8000,#ff0000);border:1px solid var(--border2);position:relative;}
+.wien-pin{position:absolute;top:-4px;width:2px;height:18px;background:white;border-radius:1px;transform:translateX(-50%);}
+.wien-label{font-size:9px;color:var(--text2);display:flex;justify-content:space-between;}
+
+/* ACHIEVEMENTS */
+.ar{display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px solid var(--border);}
+.ar:last-child{border-bottom:none;}
+.ai{font-size:15px;filter:grayscale(1) opacity(.3);transition:filter .4s;}
+.ai.ok{filter:none;}
+.at{font-size:10px;}
+.an{color:var(--text2);font-weight:700;}
+.ad{color:var(--text3);font-size:9px;}
+
+/* TIMELINE */
+.tlt{width:100%;height:3px;background:var(--border2);border-radius:2px;position:relative;margin-bottom:12px;cursor:pointer;}
+.tlf{height:100%;background:var(--gold);border-radius:2px;}
+.tlth{width:10px;height:10px;background:var(--gold);border-radius:50%;border:2px solid var(--bg);position:absolute;top:-3.5px;transform:translateX(-50%);cursor:grab;}
+.tlms{display:flex;flex-direction:column;gap:2px;}
+.ms{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--text3);cursor:pointer;padding:1px 0;transition:color .15s;}
+.ms:hover{color:var(--text2);}
+.ms.on{color:var(--gold);}
+.msd{width:5px;height:5px;border-radius:50%;background:var(--text3);flex-shrink:0;}
+.ms.on .msd{background:var(--gold);}
+
+/* NOTES */
+.note{font-size:9px;margin-top:4px;padding:4px 7px;border-radius:4px;line-height:1.4;}
+.nw{background:rgba(255,124,48,.08);color:var(--orange);border-left:2px solid var(--orange);}
+.ni{background:rgba(32,192,144,.08);color:var(--teal);border-left:2px solid var(--teal);}
+.nd{background:rgba(240,72,72,.08);color:var(--red);border-left:2px solid var(--red);animation:pulse .8s ease-in-out infinite alternate;}
+.np{background:rgba(255,40,40,.12);color:#ff6060;border-left:2px solid #ff4444;animation:pulse .5s ease-in-out infinite alternate;}
+@keyframes pulse{from{opacity:.6}to{opacity:1}}
+.ir{font-size:9px;color:var(--text3);margin-top:2px;line-height:1.4;}
+
+/* DEATH REPORT */
+.dr{background:rgba(240,72,72,.05);border:1px solid rgba(240,72,72,.2);border-radius:8px;padding:9px 11px;margin-top:5px;}
+.drt{font-family:'Syne',sans-serif;font-size:10px;font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:7px;}
+.drr{display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;color:var(--text2);}
+.drr span:last-child{color:var(--text);font-weight:700;}
+
+/* QUIZ MODE */
+.quiz-panel{background:rgba(160,96,240,.06);border:1px solid rgba(160,96,240,.2);border-radius:8px;padding:10px 12px;}
+.quiz-q{font-size:11px;color:var(--text);margin-bottom:8px;line-height:1.5;}
+.quiz-opts{display:flex;flex-direction:column;gap:5px;}
+.qopt{font-size:10px;padding:6px 10px;border-radius:5px;border:1px solid var(--border2);cursor:pointer;color:var(--text2);background:transparent;text-align:left;transition:all .15s;}
+.qopt:hover{border-color:var(--purple);color:var(--purple);}
+.qopt.correct{background:rgba(64,200,112,.15);border-color:var(--green);color:var(--green);}
+.qopt.wrong{background:rgba(240,72,72,.1);border-color:var(--red);color:var(--red);}
+.quiz-result{font-size:11px;margin-top:8px;padding:7px 9px;border-radius:5px;line-height:1.5;}
+.quiz-score{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--gold);margin-top:4px;}
+
+/* EVENT OVERLAY */
+.evo{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(5,8,15,.88);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .3s;}
+.evo.show{opacity:1;pointer-events:all;}
+.evc{background:var(--panel2);border:1px solid var(--border2);border-radius:12px;padding:22px 26px;max-width:520px;width:92%;transform:translateY(20px);transition:transform .3s;}
+.evo.show .evc{transform:translateY(0);}
+.evph{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;}
+.evti{font-family:'Syne',sans-serif;font-size:19px;font-weight:800;margin-bottom:9px;color:var(--text);}
+.evbd{font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:12px;}
+.eveq{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 11px;font-size:11px;color:var(--gold);margin-bottom:12px;}
+.evnx{font-size:11px;color:var(--teal);margin-bottom:14px;}
+.evdis{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:8px 18px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;}
+.evdis:hover{border-color:var(--gold);color:var(--gold);}
+
+/* MAIN */
+.main{grid-area:main;position:relative;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
+canvas{display:block;width:100%;height:100%;}
+
+/* FOOTER */
+.ftr{grid-area:ftr;background:var(--bg2);border-top:1px solid var(--border);padding:0 16px;display:flex;align-items:center;gap:14px;font-size:9px;color:var(--text3);overflow:hidden;}
+.ftr span{white-space:nowrap;}
+.fhl{color:var(--text2);}
+
+/* UNLOCK FLASH */
+@keyframes unlockFlash{0%{transform:scale(1)}30%{transform:scale(1.5)}60%{transform:scale(0.9)}100%{transform:scale(1.15)}}
+.dc-badge.just-earned{animation:unlockFlash .5s ease-out forwards;}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="logo">⬡ STELLAR ENGINE<small>ARCHETYPE TEACHING SIMULATOR v4.0</small></div>
+  <div class="hcontrols">
+    <span id="hPhase" class="pill p-ms">Main Sequence</span>
+    <button class="btn" id="playBtn" onclick="togglePlay()">▶ PLAY</button>
+    <button class="btn" id="mathBtn" onclick="toggleSection('math')">∑ MATH</button>
+    <button class="btn" id="quizBtn" onclick="toggleSection('quiz')">? QUIZ</button>
+    <button class="btn" id="compBtn" onclick="toggleSection('comp')">★ COMPARE</button>
+    <button class="btn" onclick="resetSim()" style="color:var(--text3)">↺</button>
+  </div>
+</header>
+
+<aside class="side" id="sidebar">
+
+  <!-- NEBULA GAS POOL -->
+  <div class="sbs">
+    <div class="nebula-hud">
+      <div class="nebula-title">⬡ Stellar Nursery</div>
+      <div class="nebula-grid">
+        <div class="nebula-cell"><div class="nebula-label">Nebula Gas</div><div class="nebula-val" id="nGas">500 M☉</div></div>
+        <div class="nebula-cell"><div class="nebula-label">Generation</div><div class="nebula-val" id="nGen">Gen 1</div></div>
+        <div class="nebula-cell"><div class="nebula-label">Metallicity</div><div class="nebula-val" id="nMetZ" style="color:var(--cyan)">Z=0.001</div></div>
+        <div class="nebula-cell"><div class="nebula-label">Returned</div><div class="nebula-val" id="nReturned" style="color:var(--green)">0 M☉</div></div>
+      </div>
+      <div class="nebula-bar-wrap">
+        <div class="nebula-bar-label"><span>Gas remaining</span><span id="nGasPct">100%</span></div>
+        <div class="nebula-bar"><div class="nebula-bar-fill" id="nGasBar" style="width:100%"></div></div>
+      </div>
+      <div style="font-size:8px;color:rgba(160,96,240,.6);margin-bottom:5px;">Death types collected:</div>
+      <div class="death-collector" id="deathCollector"></div>
+    </div>
+  </div>
+
+  <!-- INPUTS -->
+  <div class="sbs">
+    <div class="sbl">Input Parameters</div>
+    <div class="sr">
+      <div class="sh"><span class="sn">Initial Mass <span class="g" data-tip="The mass of the star when it first ignites hydrogen fusion on the Zero Age Main Sequence (ZAMS). This single value determines the star's luminosity, lifespan, temperature, and ultimate fate. Below 0.08 M☉: brown dwarf (no H fusion). Above 130 M☉: pair-instability supernova (complete destruction).">M<sub>ini</sub></span></span><span class="sv" id="vMass">1.0 M☉</span></div>
+      <input type="range" id="sMass" min="0.08" max="150" step="0.1" value="1.0" oninput="onSlider()">
+      <div class="ir">0.08–8: WD | 8–35: NS | 35–130: BH | >130: Pair-instability SN</div>
+    </div>
+    <div class="sr">
+      <div class="sh"><span class="sn">Accretion Rate <span class="g" data-tip="Mass transferred per year from a companion star or surrounding nebula. If a White Dwarf accretes past 1.44 M☉ (Chandrasekhar limit) it explodes as a Type Ia supernova. A Neutron Star past 3 M☉ (TOV limit) collapses to a Black Hole.">Ṁ</span></span><span class="sv" id="vAccretion">0</span></div>
+      <input type="range" id="sAccretion" min="0" max="0.01" step="0.0001" value="0" oninput="onSlider()">
+      <div class="ir">M☉/yr — binary companion mass transfer</div>
+    </div>
+    <div class="sr">
+      <div class="sh"><span class="sn">Rotation <span class="g" data-tip="Equatorial spin speed. Fast rotation (>100 km/s) triggers two effects: Von Zeipel theorem (poles hotter than equator) and Eddington-Sweet circulation (mixing fresh hydrogen into the core, extending MS lifetime by up to 15%). Very fast rotation (>300 km/s) can produce magnetars in 8-12 M☉ stars.">v<sub>rot</sub></span></span><span class="sv" id="vRot">0 km/s</span></div>
+      <input type="range" id="sRot" min="0" max="500" step="1" value="0" oninput="onSlider()">
+      <div class="ir">Von Zeipel + Eddington-Sweet active >100 km/s</div>
+    </div>
+    <div class="sr">
+      <div class="sh"><span class="sn">Metallicity <span class="g" data-tip="Fraction of elements heavier than H and He. Actively changes wind mass-loss rate (Ṁ ∝ Z^0.7), Wolf-Rayet threshold, and MS lifetime. Solar metallicity Z☉=0.014. Pop III (first) stars had Z≈0. Low Z = stronger, hotter, longer-lived stars.">Z</span></span><span class="sv" id="vMetSlider">Z=0.014</span></div>
+      <input type="range" id="sMet" min="0.0001" max="0.030" step="0.0001" value="0.014" oninput="onSlider()">
+      <div class="ir">Affects wind, WR threshold, lifetime (Vink et al. 2001)</div>
+    </div>
+    <div class="sr" style="margin-bottom:0">
+      <div class="sh"><span class="sn">Elapsed Time <span class="g" data-tip="How far through the star's life the simulation currently is. 100% = end of main sequence. Beyond 100% = post-main-sequence evolution (giant branch, remnant phases).">t</span></span><span class="sv" id="vTime">0 yr</span></div>
+      <div style="position:relative;margin-top:6px">
+        <div class="tlt" id="tlTrack"><div class="tlf" id="tlFill" style="width:0%"></div><div class="tlth" id="tlThumb" style="left:0%"></div></div>
+      </div>
+    </div>
+    <div class="tlms" id="tlMs"></div>
+    <div id="nEdd" class="note ni" style="display:none"></div>
+    <div id="nAccr" class="note nw" style="display:none"></div>
+    <div id="nDang" class="note nd" style="display:none"></div>
+    <div id="nPair" class="note np" style="display:none">⚡ M > 130 M☉ — γγ→e⁺e⁻ pair production will cause TOTAL DESTRUCTION. No remnant.</div>
+    <div id="nBD" class="note" style="display:none;background:rgba(120,80,40,.08);color:#c08050;border-left:2px solid #a06030">🟤 M < 0.08 M☉ — insufficient mass for hydrogen fusion. Brown dwarf (failed star).</div>
+    <div id="nHFlash" class="note ni" style="display:none">⚡ Helium flash occurring — degenerate He core ignites explosively!</div>
+  </div>
+
+  <!-- STELLAR PROPERTIES -->
+  <div class="sbs">
+    <div class="sbl">Stellar Properties</div>
+    <div class="sg" style="margin-bottom:7px">
+      <div class="sc"><div class="sl">Current Mass</div><div class="sv2" id="sCM">1.00 M☉</div></div>
+      <div class="sc"><div class="sl">Luminosity</div><div class="sv2" id="sL">1.0 L☉</div></div>
+      <div class="sc"><div class="sl"><span class="g" data-tip="Effective surface temperature. Determines color (Wien's law), spectral class, and emission spectrum. Calculated from L and R via the Stefan-Boltzmann law.">T<sub>eff</sub></span></div><div class="sv2" id="sT">5778 K</div></div>
+      <div class="sc"><div class="sl">Radius</div><div class="sv2" id="sR">1.0 R☉</div></div>
+      <div class="sc"><div class="sl"><span class="g" data-tip="Morgan-Keenan spectral classification. O (hottest, blue-white) → B → A → F → G (Sun) → K → M (coolest, red). The subclass digit (0-9) refines within each class.">Spectral Class</span></div><div class="sv2" id="sSp" style="color:var(--gold)">G2</div></div>
+      <div class="sc"><div class="sl"><span class="g" data-tip="Main Sequence lifetime. Calculated as T_MS = 13×10⁹ × (M/M☉)^−2.5 years, with metallicity and rotation corrections. More massive stars burn fuel faster despite having more — a 10 M☉ star lives only ~30 million years vs the Sun's 10 billion.">MS Lifetime</span></div><div class="sv2" id="sTMS">10.0 Gyr</div></div>
+      <div class="sc"><div class="sl">Metallicity [Fe/H]</div><div class="sv2" id="sMet2" style="color:var(--teal)">+0.00</div></div>
+      <div class="sc"><div class="sl">t / T<sub>MS</sub></div><div class="sv2" id="sProg" style="color:var(--amber)">0%</div></div>
+    </div>
+    <!-- Wien wavelength indicator -->
+    <div class="sbl" style="margin-top:4px"><span class="g" data-tip="Wien's Displacement Law: λ_peak = 2,897,771 nm·K / T. Shows which part of the spectrum the star emits most energy in. The Sun peaks at ~500nm (green-yellow). O-stars peak in UV. Red giants peak in near-infrared.">Peak Emission Wavelength</span></div>
+    <div class="wien-bar" id="wienBar"><div class="wien-pin" id="wienPin"></div></div>
+    <div class="wien-label"><span>UV 200nm</span><span id="wienVal">500nm</span><span>IR 1500nm</span></div>
+    <!-- Fusion chain indicator -->
+    <div style="margin-top:6px;font-size:9px;color:var(--text3)">
+      <span class="g" data-tip="Stars below ~1.3 M☉ fuse hydrogen via the proton-proton (pp) chain (rate ∝ T⁴). More massive stars use the CNO cycle (rate ∝ T¹⁷), which is extremely temperature-sensitive and explains why massive stars burn millions of times faster despite having more fuel.">Active fusion chain:</span>
+      <span id="fusionChain" style="color:var(--teal);margin-left:4px">pp chain</span>
+    </div>
+    <!-- Wind mass-loss info -->
+    <div style="margin-top:4px;font-size:9px;color:var(--text3)">
+      Wind mass-loss: <span id="windRate" style="color:var(--orange)">negligible</span>
+    </div>
+  </div>
+
+  <!-- VIEW TABS -->
+  <div class="sbs">
+    <div class="sbl">View Mode</div>
+    <div class="tabs">
+      <div class="tab" onclick="setView('star',this)">STAR</div>
+      <div class="tab on" onclick="setView('onion',this)">ONION</div>
+      <div class="tab" onclick="setView('hr',this)">H-R DIAGRAM</div>
+    </div>
+  </div>
+
+  <!-- SHELL LEGEND -->
+  <div class="sbs" id="shellSec">
+    <div class="sbl">Shell Composition</div>
+    <div id="shellLeg"></div>
+  </div>
+
+  <!-- MATH PANEL -->
+  <div class="sbs" id="mathSec" style="display:none">
+    <div class="sbl">Live Physics Equations</div>
+    <div id="eqBlocks"></div>
+  </div>
+
+  <!-- QUIZ PANEL -->
+  <div class="sbs" id="quizSec" style="display:none">
+    <div class="sbl">Prediction Quiz</div>
+    <div id="quizContent"></div>
+  </div>
+
+  <!-- COMPARE PANEL -->
+  <div class="sbs" id="compSec" style="display:none">
+    <div class="sbl">Real Star Comparison</div>
+    <div id="compContent"></div>
+  </div>
+
+  <!-- ACHIEVEMENTS -->
+  <div class="sbs">
+    <div class="sbl">Discoveries Unlocked</div>
+    <div id="achList"></div>
+  </div>
+
+  <!-- DEATH REPORT -->
+  <div class="sbs" id="deathSec" style="display:none">
+    <div class="dr"><div class="drt">☠ Death Report</div><div id="deathC"></div></div>
+  </div>
+
+</aside>
+
+<main class="main" id="mainArea">
+  <canvas id="C"></canvas>
+  <div class="evo" id="evo">
+    <div class="evc">
+      <div class="evph" id="evPh"></div>
+      <div class="evti" id="evTi"></div>
+      <div class="evbd" id="evBd"></div>
+      <div class="eveq" id="evEq"></div>
+      <div class="evnx" id="evNx"></div>
+      <button class="evdis" onclick="dismissEvent()">CONTINUE SIMULATION →</button>
+    </div>
+  </div>
+</main>
+
+<footer class="ftr">
+  <span>L=(M/M☉)<sup>3.5</sup>L☉</span><span>|</span>
+  <span>T<sub>MS</sub>=13×10⁹M<sup>−2.5</sup>yr</span><span>|</span>
+  <span>L=4πσR²T⁴</span><span>|</span>
+  <span>λ<sub>max</sub>=2.898×10⁶/T nm</span><span>|</span>
+  <span id="fLive" class="fhl">Ready</span>
+</footer>
+
+<script>
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+const SB=5.6704e-8, LSUN=3.828e26, RSUN=6.957e8;
+const VCRIT=500, MACH=1.44, MTOV=3.0;
+const ZSUN=0.0142; // Asplund 2009
+
+// ─── REAL STARS ──────────────────────────────────────────────────────────────
+const REAL_STARS=[
+  {name:'Sun',       M:1.0,   L:1,      T:5778,  cls:'G2V',  note:'Our star — reference point'},
+  {name:'Sirius A',  M:2.1,   L:25,     T:9940,  cls:'A1V',  note:'Brightest star in the night sky'},
+  {name:'Sirius B',  M:0.98,  L:0.025,  T:25200, cls:'DA2',  note:'White dwarf companion to Sirius A'},
+  {name:'Betelgeuse',M:20,    L:1.3e5,  T:3500,  cls:'M2Ia', note:'Red supergiant — will go supernova'},
+  {name:'Rigel',     M:21,    L:1.2e5,  T:12100, cls:'B8Ia', note:'Blue supergiant in Orion'},
+  {name:'Eta Car.',  M:150,   L:5e6,    T:36000, cls:'LBV',  note:'Near Eddington limit; 150 M☉'},
+  {name:'Proxima',   M:0.12,  L:0.0017, T:3042,  cls:'M5Ve', note:'Nearest star to the Sun (4.24 ly)'},
+  {name:'Deneb',     M:19,    L:2e5,    T:8525,  cls:'A2Ia', note:'Supergiant, ~2600 ly away'},
+];
+
+// ─── SHELL DEFINITIONS ───────────────────────────────────────────────────────
+const SHELLS=[
+  {name:'H',  col:'#4a8af0',rx:'4H → ²He + 2e⁺ + 2νₑ + 26.7 MeV',T:'~1.5×10⁷ K', P:'~10¹⁶ Pa'},
+  {name:'He', col:'#20c090',rx:'3⁴He → ¹²C + γ (triple-alpha)',    T:'~2×10⁸ K',   P:'~10²¹ Pa'},
+  {name:'C',  col:'#f0c040',rx:'¹²C+¹²C → ²⁴Mg / ²³Na+p',         T:'~8×10⁸ K',   P:'~10²⁴ Pa'},
+  {name:'Ne', col:'#ff7c30',rx:'²⁰Ne+γ → ¹⁶O+⁴He (photo-disint.)',T:'~1.5×10⁹ K', P:'~10²⁵ Pa'},
+  {name:'O',  col:'#a060f0',rx:'¹⁶O+¹⁶O → ³²S / ²⁸Si+⁴He',        T:'~2×10⁹ K',   P:'~10²⁶ Pa'},
+  {name:'Si', col:'#f04848',rx:'²⁸Si+⁴He chain → ⁵⁶Ni → ⁵⁶Fe',    T:'~3×10⁹ K',   P:'~10²⁷ Pa'},
+  {name:'Fe', col:'#888888',rx:'⁵⁶Fe — endothermic: ΔE<0 per event',T:'>3×10⁹ K',   P:'~10²⁸ Pa'},
+];
+
+// ─── DEATH TYPE COLLECTOR ────────────────────────────────────────────────────
+const DEATH_TYPES=[
+  {id:'brown_dwarf',   icon:'🟤', label:'Brown Dwarf',         tip:'Failed star: M < 0.08 M☉. Deuterium burns briefly, no H fusion.'},
+  {id:'white_dwarf',   icon:'⚪', label:'White Dwarf',         tip:'Electron-degenerate CO remnant of low/mid mass stars.'},
+  {id:'type_ia',       icon:'💀', label:'Type Ia Supernova',   tip:'Thermonuclear detonation of accreting WD at Chandrasekhar limit.'},
+  {id:'core_collapse', icon:'💥', label:'Core-Collapse SN',    tip:'Iron core collapse — 99% of energy exits as neutrinos in 10 seconds.'},
+  {id:'neutron_star',  icon:'🔵', label:'Neutron Star',        tip:'Neutron-degenerate remnant. Nuclear density: 10¹⁷ kg/m³.'},
+  {id:'magnetar',      icon:'⚡', label:'Magnetar',            tip:'B~10¹⁵ G — strongest magnets in universe. 2004 SGR flare outshone Milky Way.'},
+  {id:'black_hole',    icon:'⚫', label:'Black Hole',          tip:'TOV limit exceeded. Event horizon swallows light itself.'},
+  {id:'pair_instab',   icon:'☢', label:'Pair-Instab. SN',    tip:'M>130 M☉: γγ→e⁺e⁻ removes pressure support. TOTAL DESTRUCTION — no remnant.'},
+];
+
+// ─── EVENTS ──────────────────────────────────────────────────────────────────
+const EVENTS=[
+  {id:'h_ex',  phases:['Red Giant','Red Supergiant','LBV','Wolf-Rayet'], col:'#4a8af0',
+   title:'Hydrogen exhausted in the core',
+   body:'After fusing hydrogen for millions to billions of years, the core is now mostly helium. Without fusion energy, radiation pressure drops and gravity compresses the core. The rising temperature ignites hydrogen burning in a shell around the inert He core — the outer envelope expands dramatically in response.',
+   eq:'T_MS = 13×10⁹ × (M/M☉)⁻²·⁵ yr — faster burn for higher mass',
+   next:'Shell H-burning begins. The envelope expands and cools → giant branch ascent.'},
+  {id:'he_fl', phases:['Planetary Nebula'], col:'#f0c040',
+   title:'Helium flash — explosive degenerate ignition',
+   body:'For stars under ~2 M☉, the helium core becomes electron-degenerate before reaching He-ignition temperature. In a degenerate gas, pressure is independent of temperature — so when helium finally ignites at ~10⁸ K, the temperature surges but pressure doesn\'t respond to slow it down. The runaway reaction releases ~10¹¹ L☉ for a few seconds — but happens deep inside and is invisible at the surface. Electron degeneracy lifts when the core becomes hot enough, and burning stabilizes.',
+   eq:'3⁴He → ¹²C + γ  (triple-alpha, T > 10⁸ K) | Flash: L ~ 10¹¹ L☉ for seconds',
+   next:'Degeneracy lifts, He burning stabilizes on the Horizontal Branch. Core is now non-degenerate He.'},
+  {id:'wr_ph', phases:['Wolf-Rayet'], col:'#a060f0',
+   title:'Wolf-Rayet phase — envelope stripped',
+   body:'Extreme radiation-driven stellar winds (mass loss ~10⁻⁵ M☉/yr) have stripped the outer hydrogen and helium envelopes completely. The exposed carbon-oxygen core blazes at T > 50,000 K, flooding space with ionizing UV radiation and enriching the surrounding nebula with heavy elements. Wind mass-loss scales with metallicity as Ṁ ∝ Z⁰·⁷ — at low metallicity, stars can reach 80+ M☉ before becoming Wolf-Rayets.',
+   eq:'Ṁ_wind ∝ Z⁰·⁷  |  M_WR_threshold ≈ 25 + 15×(1 − Z/Z☉) M☉',
+   next:'The stripped CO core will explode as Type Ib/Ic supernova within ~100,000 yr.'},
+  {id:'fe_co', phases:['Supernova'], col:'#f04848',
+   title:'Iron core — stability failure',
+   body:'Silicon burning has built an iron-56 core exceeding ~1.4 M☉. Iron is the most tightly bound nucleus in nature — fusing it CONSUMES energy rather than releasing it. Radiation pressure vanishes in milliseconds. The core collapses at ~0.25c, bounces off nuclear density (~10¹⁷ kg/m³), and the rebound shockwave tears the star apart. 99% of the energy — 3×10⁵³ erg — exits as neutrinos in 10 seconds. SN1987A confirmed this: neutrinos arrived at Earth 3 hours before the light.',
+   eq:'⁵⁶Fe → endothermic (ΔE < 0)  →  core collapse in ~0.1 seconds | E_ν ≈ 3×10⁵³ erg',
+   next:'A core-collapse supernova — remnant is a Neutron Star or Black Hole depending on mass.'},
+  {id:'ch_ia', phases:['Type Ia Supernova'], col:'#f04848',
+   title:'Chandrasekhar limit exceeded',
+   body:'Accretion from the companion star has pushed the white dwarf past 1.44 M☉ — the Chandrasekhar limit. Electron degeneracy pressure can no longer support it. Carbon ignites explosively throughout the entire degenerate object simultaneously — no remnant is left behind. Type Ia supernovae all have nearly identical peak luminosity, making them the "standard candles" used to measure the expansion of the universe and discover dark energy.',
+   eq:'M_Ch = 1.44 M☉  |  synthesizes ~0.5 M☉ of ⁵⁶Ni → ⁵⁶Co → ⁵⁶Fe',
+   next:'Type Ia supernova — dominant source of iron in the universe. Standard cosmological candle.'},
+  {id:'lbv_e', phases:['LBV'], col:'#f0c040',
+   title:'Luminous Blue Variable eruption',
+   body:'This star\'s luminosity approaches the Eddington limit — where radiation pressure exceeds gravity. Periodic giant eruptions shed 10–20 M☉ over years, briefly outshining entire galaxies. Eta Carinae did this in 1843, becoming the second-brightest star in the sky for decades. The Eddington limit is the maximum luminosity at which the outward radiation force can be balanced by gravity.',
+   eq:'L_Edd = 4πGMc/κ ≈ 3.2×10⁴ × (M/M☉) L☉',
+   next:'After shedding its envelope, the star contracts and heats into a Wolf-Rayet phase.'},
+  {id:'bh_f',  phases:['Black Hole'], col:'#888',
+   title:'Black hole formed',
+   body:'The collapsing stellar core exceeded the Tolman-Oppenheimer-Volkoff (TOV) limit — the maximum mass a neutron star can support via neutron degeneracy pressure. The core collapses past the Schwarzschild radius, forming an event horizon. Nothing, not even light, can escape.',
+   eq:'r_s = 2GM/c²  (Schwarzschild radius) ≈ 2.95 × M/M☉  km',
+   next:'The black hole will grow by accreting nearby material, potentially forming an X-ray binary.'},
+  {id:'pi_sn', phases:['Pair-Instability Supernova'], col:'#ff4444',
+   title:'Pair-instability supernova — total annihilation',
+   body:'Above ~130 M☉, the core temperature is so extreme that high-energy gamma-ray photons spontaneously convert to electron-positron pairs (γγ→e⁺e⁻). These pairs carry away the energy that was providing pressure support. The core begins to collapse under gravity, but instead of iron poisoning causing the collapse, it\'s the disappearance of radiation pressure. The resulting contraction ignites explosive oxygen/silicon burning throughout the entire star simultaneously — releasing ~10⁵¹ erg and completely destroying the star. There is NO remnant — not even a black hole. The star is converted entirely to energy and ejected heavy elements.',
+   eq:'γγ → e⁺e⁻  (pair production removes radiation pressure) | E_total ~ 10⁵¹ erg | No remnant',
+   next:'Complete destruction. All mass returned to nebula as heavy elements. Maximum Z enrichment.'},
+  {id:'bd_f',  phases:['Brown Dwarf'], col:'#a06030',
+   title:'Brown dwarf — the failed star',
+   body:'At less than 0.08 M☉ (about 80 Jupiter masses), there is insufficient mass to sustain hydrogen fusion. Objects above 13 Jupiter masses briefly fuse deuterium — a heavier form of hydrogen — but this runs out in ~10 million years. The object then slowly cools over billions of years, fading from M-type red through L-type deep red to T-type methane-dominated brown. Brown dwarfs are sometimes called "failed stars" but are also the most common stellar-mass objects in the galaxy.',
+   eq:'M_min(H fusion) = 0.08 M☉  |  M_min(D fusion) = 0.013 M☉ (13 M_Jup)',
+   next:'Slow cooling over billions of years. Spectral sequence: M → L → T → Y (coldest, ~300K).'},
+];
+
+// ─── QUIZ QUESTIONS ───────────────────────────────────────────────────────────
+const QUIZ=[
+  {q:'A star of 1 M☉ is set to t=80%. What is happening inside?',
+   opts:['Helium burning in the core','Hydrogen burning on the main sequence','Carbon fusing in the shell','Iron core forming'],
+   ans:1,expl:'At 80% of its main-sequence life, a 1 M☉ star is still fusing hydrogen in its core via the pp chain. H exhaustion triggers giant branch ascent near t=100%.'},
+  {q:'Why does the helium flash (low-mass stars) happen explosively?',
+   opts:['The He core runs out of fuel suddenly','Degenerate matter pressure is temperature-independent — T spikes without pressure response','Carbon ignites simultaneously throughout the core','Radiation pressure exceeds gravity at the core'],
+   ans:1,expl:'In electron-degenerate matter, pressure depends on density (not temperature). When He ignites, temperature surges but pressure doesn\'t increase to slow the reaction — creating a runaway thermal flash releasing ~10¹¹ L☉ for seconds, invisible at the surface.'},
+  {q:'You set M=25 M☉ and advance to t=107%. What remnant appears?',
+   opts:['White Dwarf (~0.8 M☉)','Neutron Star (~1.4 M☉)','Black Hole (>3 M☉)','Planetary Nebula'],
+   ans:2,expl:'A 25 M☉ star ends its life as a core-collapse supernova. The remnant core exceeds the TOV limit (~3 M☉), so it collapses to a Black Hole rather than a Neutron Star.'},
+  {q:'Why does a 100 M☉ star live only ~3 million years?',
+   opts:['It has less hydrogen fuel','T_MS ∝ M⁻²·⁵ — higher mass = faster burn rate','Its core is too cool for efficient fusion','Strong winds expel the fuel before it fuses'],
+   ans:1,expl:'The mass-luminosity law L ∝ M³·⁵ means a 100 M☉ star shines ~10⁷× brighter than the Sun. Despite having 100× more fuel, it burns it ~10⁵× faster. T_MS = 13×10⁹ × 100⁻²·⁵ ≈ 1.3 Myr.'},
+  {q:'Setting v_rot = 400 km/s extends the star\'s life. Why?',
+   opts:['Rotation slows down fusion reactions','Eddington-Sweet circulation mixes fresh H into the core','Von Zeipel theorem increases core pressure','The star becomes more oblate and loses luminosity'],
+   ans:1,expl:'Rapid rotation drives meridional circulation currents (Eddington-Sweet) that replenish the core with fresh hydrogen from the envelope, effectively extending the main-sequence lifetime by up to 15%.'},
+  {q:'What makes pair-instability supernovae unique among stellar deaths?',
+   opts:['They release the most neutrinos','The star leaves no remnant — complete destruction','They only occur in binary star systems','They are caused by iron core formation'],
+   ans:1,expl:'In pair-instability SNe (M>130 M☉), γγ→e⁺e⁻ pair production removes radiation pressure. Explosive oxygen/silicon burning completely destroys the star — no neutron star, no black hole. The entire stellar mass is converted to heavy elements and kinetic energy.'},
+  {q:'Low metallicity stars (Z << Z☉) tend to have stronger winds. True or false?',
+   opts:['True — low-Z stars have more radiation to drive winds','False — stellar winds scale as Ṁ ∝ Z⁰·⁷, so low Z means WEAKER winds','True — they compensate with faster rotation','False — metallicity has no effect on winds'],
+   ans:1,expl:'Radiation-driven stellar winds are powered by metal ions absorbing momentum from photons. Lower metallicity = fewer absorbers = weaker winds. This means low-Z massive stars retain more mass, have higher WR thresholds, and are more likely to form black holes via direct collapse.'},
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+const S={
+  tFrac:0, playing:false, view:'onion', playTimer:null,
+  trail:[], firedEvts:new Set(), lastPhase:'', lastM0:null,
+  activeSections:{math:false,quiz:false,comp:false},
+  quizIdx:0, quizAnswered:false, quizScore:0, quizTotal:0,
+  ach:{firstStar:false,redGiant:false,supernova:false,blackHole:false,
+       neutronStar:false,whiteDwarf:false,chandrasekhar:false,
+       wolfRayet:false,lbv:false,ironCore:false,allPhases:false,
+       heliumFlash:false,pairInstab:false,brownDwarf:false,magnetar:false},
+  snAnim:0, piAnim:0,
+  // Nebula game state
+  nebulaMass:500, nebulaZ:0.001, generation:1, massReturned:0,
+  deathsEarned:new Set(),
+};
+
+// ─── CANVAS ───────────────────────────────────────────────────────────────────
+const canvas=document.getElementById('C'), ctx=canvas.getContext('2d');
+function resize(){
+  const a=document.getElementById('mainArea');
+  canvas.width=a.clientWidth; canvas.height=a.clientHeight; draw();
+}
+window.addEventListener('resize',resize);
+
+// ─── TIMELINE DRAG ────────────────────────────────────────────────────────────
+let drag=false;
+function tlPct(e){
+  const r=document.getElementById('tlTrack').getBoundingClientRect();
+  const cx=e.touches?e.touches[0].clientX:e.clientX;
+  return Math.max(0,Math.min(1,(cx-r.left)/r.width));
+}
+document.getElementById('tlTrack').addEventListener('mousedown',e=>{drag=true;S.tFrac=tlPct(e);onSlider();});
+document.getElementById('tlTrack').addEventListener('touchstart',e=>{drag=true;S.tFrac=tlPct(e);onSlider();},{passive:true});
+window.addEventListener('mousemove',e=>{if(drag){S.tFrac=tlPct(e);onSlider();}});
+window.addEventListener('touchmove',e=>{if(drag){S.tFrac=tlPct(e);onSlider();}},{passive:true});
+window.addEventListener('mouseup',()=>drag=false);
+window.addEventListener('touchend',()=>drag=false);
+
+// ─── CONTROLS ─────────────────────────────────────────────────────────────────
+function togglePlay(){
+  S.playing=!S.playing;
+  const b=document.getElementById('playBtn');
+  if(S.playing){
+    b.textContent='⏸ PAUSE';b.classList.add('on');
+    S.playTimer=setInterval(()=>{
+      // FIX: play loop extends to 1.19 to reach remnants
+      if(S.tFrac>=1.19){S.playing=false;b.textContent='▶ PLAY';b.classList.remove('on');clearInterval(S.playTimer);return;}
+      S.tFrac=Math.min(1.19,S.tFrac+0.0012);
+      onSlider();
+    },50);
+  } else {
+    clearInterval(S.playTimer);b.textContent='▶ PLAY';b.classList.remove('on');
+  }
+}
+
+function toggleSection(id){
+  S.activeSections[id]=!S.activeSections[id];
+  const secIds={math:'mathSec',quiz:'quizSec',comp:'compSec'};
+  const btnIds={math:'mathBtn',quiz:'quizBtn',comp:'compBtn'};
+  Object.keys(secIds).forEach(k=>{
+    document.getElementById(secIds[k]).style.display=S.activeSections[k]?'block':'none';
+    document.getElementById(btnIds[k]).classList.toggle('on',S.activeSections[k]);
+  });
+  if(id==='quiz'&&S.activeSections.quiz) renderQuiz();
+  if(id==='comp'&&S.activeSections.comp) renderComp();
+  if(id==='math'&&S.activeSections.math) updateMath(calcStar());
+  const sec=document.getElementById(secIds[id]);
+  if(S.activeSections[id]) setTimeout(()=>sec.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+}
+
+function setView(v,el){
+  S.view=v;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  if(el)el.classList.add('on');
+  draw();
+}
+
+function resetSim(){
+  S.tFrac=0;S.trail=[];S.firedEvts.clear();S.lastPhase='';S.lastM0=null;
+  clearInterval(S.playTimer);S.playing=false;
+  document.getElementById('playBtn').textContent='▶ PLAY';
+  document.getElementById('playBtn').classList.remove('on');
+  // Reset nebula for new run but keep enrichment as reward
+  S.massReturned=0;
+  onSlider();
+}
+
+function dismissEvent(){
+  document.getElementById('evo').classList.remove('show');
+  if(!S.playing)togglePlay();
+}
+
+function jumpTo(pct){
+  S.tFrac=Math.min(1.19,(pct/100)*1.2);
+  S.trail=[];
+  onSlider();
+}
+
+// ─── PHYSICS ─────────────────────────────────────────────────────────────────
+function calcStar(){
+  const M0=parseFloat(document.getElementById('sMass').value);
+  const Md=parseFloat(document.getElementById('sAccretion').value);
+  const vr=parseFloat(document.getElementById('sRot').value);
+  const Zslider=parseFloat(document.getElementById('sMet').value);
+  const tf=S.tFrac;
+
+  // FIX: H-R trail clears when M_ini changes
+  const curM0=M0;
+  if(S.lastM0!==null && S.lastM0!==curM0){
+    S.trail=[];
+    S.firedEvts.clear();
+    S.lastPhase='';
+  }
+  S.lastM0=curM0;
+
+  // Metallicity live physics (Vink et al. 2001)
+  const Zfrac=Zslider;
+  const Zratio=Zfrac/ZSUN;
+  const feH=Math.log10(Zratio); // [Fe/H] notation
+
+  const spFrac=vr/VCRIT;
+  const edd=vr>100?1+0.15*spFrac:1.0;
+  // Metallicity correction to MS lifetime: low Z → slightly longer (~5-8%)
+  const Zcorr=1+0.08*(1-Math.min(Zratio,2));
+  let TMS=Math.min(13e9*Math.pow(Math.max(M0,0.08),-2.5)*edd*Zcorr,2.5e13);
+  const tReal=tf*TMS*1.3;
+  const acc=Md*tReal;
+  let M=M0+acc;
+
+  // Metallicity-dependent WR threshold (Crowther 2007)
+  const WR_THRESH=25+15*(1-Math.min(Zratio,1));
+
+  // Wind mass-loss rate (scaled by metallicity, Vink et al. 2001)
+  const Mdot_base=M0>30?1e-5:M0>15?2e-6:M0>8?5e-7:1e-8;
+  const Mdot_wind=Mdot_base*Math.pow(Zratio,0.7);
+
+  let phase,Lr,Rr,heliumFlash=false,isMagnetar=false,isPI=false,isBD=false;
+
+  // ── BROWN DWARF ────────────────────────────────────────────────────────────
+  if(M0<0.08){
+    isBD=true;
+    phase='Brown Dwarf';
+    // Deuterium burns briefly, then cools
+    const cool=Math.min(tf/0.3,1);
+    const Teff_override=2800-cool*1000; // cools from ~2800K to ~1800K
+    Lr=0.002*Math.pow(M0/0.07,2.5)*(1-cool*0.7);
+    Rr=0.1*Math.pow(M0/0.07,0.8);
+    const Teff=Math.max(800,Teff_override);
+    return buildResult({phase,M0,M,Md,vr,tf,Lr,Rr,Teff,Zfrac,feH,TMS,tReal,spFrac,edd,acc,Mdot_wind,Zratio,WR_THRESH,heliumFlash,isMagnetar,isPI,isBD,ob:{eq:1,pol:1},Tp:Teff,Te:Teff});
+  }
+
+  // ── PAIR-INSTABILITY SN ────────────────────────────────────────────────────
+  if(M0>130){
+    isPI=true;
+    if(tf<1.0){
+      phase='Blue Supergiant';Lr=Math.pow(M0,3.5)*(1+0.2*tf);Rr=Math.pow(M0,0.62);
+    } else {
+      phase='Pair-Instability Supernova';Lr=5e10;Rr=15000;M=0.001; // no remnant - tiny value to avoid division issues
+    }
+  } else if(M0<8){
+    // ── LOW-MASS TRACK ────────────────────────────────────────────────────────
+    if(tf<1.0){phase='Main Sequence';Lr=Math.pow(M0,3.5)*(1+0.4*tf);Rr=Math.pow(M0,0.8)*(1+0.3*tf);}
+    else if(tf<1.12){
+      phase='Red Giant';const g=(tf-1)/0.12;
+      Lr=Math.pow(M0,3.5)*(1.4+9*g);Rr=Math.pow(M0,0.8)*(1.3+50*g);M-=M0*0.25*g;
+    }else if(tf<1.18){
+      // Helium flash for M<2: occurs at start of PN phase (RGB tip)
+      heliumFlash=(M0<2 && tf<1.145);
+      phase='Planetary Nebula';Lr=Math.pow(M0,3.5)*2200;Rr=800;M*=0.35;
+    }else{
+      const rem=Math.max(0.5,M*0.3);
+      phase=(Md>0&&rem>=MACH)?'Type Ia Supernova':'White Dwarf';
+      Lr=0.001;Rr=0.013;M=rem;
+    }
+  }else if(M0<WR_THRESH){
+    // ── INTERMEDIATE MASS TRACK ────────────────────────────────────────────────
+    if(tf<1.0){phase='Main Sequence';Lr=Math.pow(M0,3.5)*(1+0.3*tf);Rr=Math.pow(M0,0.7)*(1+0.2*tf);}
+    else if(tf<1.07){
+      phase='Red Supergiant';const g=(tf-1)/0.07;
+      Lr=Math.pow(M0,3.5)*(1.5+5*g);Rr=Math.pow(M0,0.7)*(2+100*g);M-=M0*0.4*g;
+    }else if(tf<1.085){phase='Supernova';Lr=1e9;Rr=5000;}
+    else{
+      const rem=M*0.2;
+      // Magnetar: high rotation + 8-12 M☉ progenitor
+      isMagnetar=(vr>300&&M0>=8&&M0<=12);
+      const isNS=rem<MTOV&&!(Md>0&&rem>=MTOV);
+      phase=isNS?(isMagnetar?'Magnetar':'Neutron Star'):'Black Hole';
+      Lr=isNS?0.0002:0;Rr=isNS?0.000014:0.000003;M=rem;
+    }
+  }else{
+    // ── HIGH-MASS TRACK ────────────────────────────────────────────────────────
+    const isLBV=M0>50;
+    if(tf<1.0){
+      if(isLBV&&tf>0.68&&tf<0.94){
+        phase='LBV';Lr=Math.pow(M0,3.5)*1.6;Rr=Math.pow(M0,0.65)*6;
+        M-=M0*0.28*((tf-0.68)/0.26);
+      }else{phase='Blue Supergiant';Lr=Math.pow(M0,3.5)*(1+0.25*tf);Rr=Math.pow(M0,0.62);}
+    }else if(tf<1.06){
+      phase='Wolf-Rayet';const w=(tf-1)/0.06;
+      Lr=Math.pow(M0,3.5)*(1.1-0.25*w);Rr=Math.pow(M0,0.62)*(0.45+0.5*w);M-=M0*0.55*w;
+    }else if(tf<1.075){phase='Supernova';Lr=2e9;Rr=8000;}
+    else{phase='Black Hole';Lr=0;Rr=0.000003;M*=0.35;}
+  }
+
+  if(!isPI&&!isBD){
+    Lr=Math.max(Lr,1e-6);Rr=Math.max(Rr,0.000003);M=Math.max(M,0.05);
+    const Labs=Lr*LSUN, Rabs=Rr*RSUN;
+    let Teff=Math.pow(Labs/(4*Math.PI*SB*Rabs*Rabs),0.25);
+    Teff=Math.max(Math.min(Teff,200000),2700);
+    const ob=spFrac>0.05?{eq:1+0.20*spFrac,pol:1-0.12*spFrac}:{eq:1,pol:1};
+    const Tp=spFrac>0.05?Teff*(1+0.18*spFrac):Teff;
+    const Te=spFrac>0.05?Teff*(1-0.09*spFrac):Teff;
+    return buildResult({phase,M0,M,Md,vr,tf,Lr,Rr,Teff,Zfrac,feH,TMS,tReal,spFrac,edd,acc,Mdot_wind,Zratio,WR_THRESH,heliumFlash,isMagnetar,isPI,isBD,ob,Tp,Te});
+  }
+  // PI SN path
+  const labs=Lr*LSUN, rabs=Rr*RSUN;
+  let Teff2=phase==='Pair-Instability Supernova'?80000:Math.pow(labs/(4*Math.PI*SB*rabs*rabs),0.25);
+  Teff2=Math.max(Math.min(Teff2,200000),2700);
+  return buildResult({phase,M0,M,Md,vr,tf,Lr,Rr,Teff:Teff2,Zfrac,feH,TMS,tReal,spFrac,edd,acc,Mdot_wind,Zratio,WR_THRESH,heliumFlash,isMagnetar,isPI,isBD,ob:{eq:1,pol:1},Tp:Teff2,Te:Teff2});
+}
+
+function buildResult(o){
+  const cno=o.M0>1.3;
+  const wienNm=Math.round(2897771/Math.max(o.Teff,800));
+  const shells=buildShells(o.M0,o.tf);
+  return{...o,cno,wienNm,shells};
+}
+
+// ─── BLACKBODY COLOR ─────────────────────────────────────────────────────────
+function planckRGB(T){
+  T=Math.max(1000,Math.min(T,40000));
+  let r,g,b;
+  if(T<=6600){r=255;g=Math.max(0,Math.min(255,99.47*Math.log(T/100)-161.12));b=T<=1900?0:Math.max(0,Math.min(255,138.52*Math.log(T/100-10)-305.04));}
+  else{r=Math.max(0,Math.min(255,329.70*Math.pow(T/100-60,-0.133)));g=Math.max(0,Math.min(255,288.12*Math.pow(T/100-60,-0.0755)));b=255;}
+  return[Math.round(r),Math.round(g),Math.round(b)];
+}
+function planckHex(T){const[r,g,b]=planckRGB(T);return'#'+[r,g,b].map(v=>('0'+v.toString(16)).slice(-2)).join('');}
+function planckCSS(T,a=1){const[r,g,b]=planckRGB(T);return`rgba(${r},${g},${b},${a})`;}
+
+// ─── SPECTRAL CLASS ───────────────────────────────────────────────────────────
+function specClass(T){
+  if(T>=30000)return'O';if(T>=10000)return'B';if(T>=7500)return'A';
+  if(T>=6000)return'F';if(T>=5200)return'G';if(T>=3700)return'K';return'M';
+}
+function specFull(T){
+  const c=specClass(T);
+  const ranges={O:[30000,90000],B:[10000,30000],A:[7500,10000],F:[6000,7500],G:[5200,6000],K:[3700,5200],M:[2400,3700]};
+  const[lo,hi]=ranges[c];
+  return c+Math.max(0,Math.min(9,Math.round(9*(1-(T-lo)/(hi-lo)))));
+}
+
+// ─── SHELLS ───────────────────────────────────────────────────────────────────
+function buildShells(M0,tf){
+  if(M0<10)return[{...SHELLS[0],frac:1,pct:100}];
+  const t=tf,raw=[];
+  raw.push({i:0,f:Math.max(0,0.32-0.28*Math.min(t,1))});
+  if(t>0.4) raw.push({i:1,f:0.22*Math.min((t-0.4)/0.6,1)});
+  if(t>0.72)raw.push({i:2,f:0.16*Math.min((t-0.72)/0.28,1)});
+  if(t>0.82)raw.push({i:3,f:0.11*Math.min((t-0.82)/0.18,1)});
+  if(t>0.89)raw.push({i:4,f:0.09*Math.min((t-0.89)/0.11,1)});
+  if(t>0.94)raw.push({i:5,f:0.07*Math.min((t-0.94)/0.06,1)});
+  if(t>0.98)raw.push({i:6,f:0.05*Math.min((t-0.98)/0.02,1)});
+  const tot=raw.reduce((s,x)=>s+x.f,0)||1;
+  return raw.filter(x=>x.f>0.005).map(x=>({...SHELLS[x.i],frac:x.f/tot,pct:Math.round(100*x.f/tot)}));
+}
+
+// ─── MILESTONES ───────────────────────────────────────────────────────────────
+function getMilestones(M0){
+  const ms=[{label:'Ignition (ZAMS)',pct:0,tip:'Zero Age Main Sequence — first hydrogen fusion'}];
+  if(M0<0.08){
+    ms.push({label:'Deuterium flash',pct:10,tip:'Brief D-fusion at ~13 M_Jup; runs out in ~10 Myr'});
+    ms.push({label:'Brown dwarf cooling',pct:30,tip:'Slowly cooling toward planetary temperatures'});
+  }else if(M0<8){
+    ms.push({label:'H exhaustion → Red Giant',pct:83,tip:'Core hydrogen depleted; shell burning begins; envelope expands'});
+    if(M0<2)ms.push({label:'Helium flash (low-mass)',pct:94,tip:'Explosive He ignition in degenerate core — ~10¹¹ L☉ for seconds'});
+    ms.push({label:'Planetary Nebula ejection',pct:100,tip:'AGB star sheds outer envelope; core exposed as proto-WD'});
+    ms.push({label:'White Dwarf remnant',pct:108,tip:'Electron-degenerate carbon-oxygen core; no fusion'});
+  }else if(M0<35){
+    ms.push({label:'H exhaustion → RSG',pct:83,tip:'Core H depleted; star swells to red supergiant'});
+    ms.push({label:'Core collapse / Supernova',pct:100,tip:'Iron core fails; bounce shockwave tears star apart'});
+    ms.push({label:'NS or BH remnant',pct:108,tip:'Neutron Star if <3 M☉; Black Hole if >3 M☉'});
+  }else if(M0<=130){
+    ms.push({label:'H exhaustion → BSG',pct:83,tip:'Blue Supergiant phase; extremely luminous'});
+    if(M0>50)ms.push({label:'LBV eruptions begin',pct:90,tip:'Luminous Blue Variable: near Eddington limit; giant eruptions'});
+    ms.push({label:'Wolf-Rayet phase',pct:100,tip:'Outer envelope stripped by radiation winds; naked CO core'});
+    ms.push({label:'Supernova → Black Hole',pct:108,tip:'Core-collapse; remnant exceeds TOV limit → Black Hole'});
+  }else{
+    ms.push({label:'H exhaustion',pct:83,tip:'Blue supergiant phase'});
+    ms.push({label:'Pair-instability SN',pct:100,tip:'γγ→e⁺e⁻ — TOTAL DESTRUCTION, no remnant'});
+  }
+  return ms;
+}
+
+// ─── EVENT SYSTEM ─────────────────────────────────────────────────────────────
+function checkEvents(star){
+  if(document.getElementById('evo').classList.contains('show'))return;
+  for(const ev of EVENTS){
+    if(S.firedEvts.has(ev.id))continue;
+    if(ev.phases.includes(star.phase)&&star.phase!==S.lastPhase){
+      S.firedEvts.add(ev.id);
+      fireEvent(ev,star.phase);
+      return;
+    }
+  }
+}
+function fireEvent(ev,phase){
+  clearInterval(S.playTimer);S.playing=false;
+  document.getElementById('playBtn').textContent='▶ PLAY';
+  document.getElementById('playBtn').classList.remove('on');
+  document.getElementById('evPh').textContent=phase.toUpperCase();
+  document.getElementById('evPh').style.color=ev.col;
+  document.getElementById('evTi').textContent=ev.title;
+  document.getElementById('evBd').textContent=ev.body;
+  document.getElementById('evEq').textContent=ev.eq;
+  document.getElementById('evNx').textContent='→ '+ev.next;
+  document.getElementById('evo').classList.add('show');
+}
+
+// ─── DEATH COLLECTOR ─────────────────────────────────────────────────────────
+function checkDeathCollector(phase,star){
+  const mapping={
+    'Brown Dwarf':'brown_dwarf',
+    'White Dwarf':'white_dwarf',
+    'Type Ia Supernova':'type_ia',
+    'Supernova':'core_collapse',
+    'Neutron Star':'neutron_star',
+    'Magnetar':'magnetar',
+    'Black Hole':'black_hole',
+    'Pair-Instability Supernova':'pair_instab',
+  };
+  const deathId=mapping[phase];
+  if(!deathId)return;
+  if(!S.deathsEarned.has(deathId)){
+    S.deathsEarned.add(deathId);
+    // Award nebula mass bonus on first earn
+    const bonus={'brown_dwarf':2,'white_dwarf':5,'type_ia':15,'core_collapse':10,
+                 'neutron_star':8,'magnetar':12,'black_hole':5,'pair_instab':30}[deathId]||5;
+    S.massReturned+=bonus;
+    S.nebulaZ=Math.min(0.030,S.nebulaZ+bonus*0.0001);
+    // Flash the badge
+    setTimeout(()=>{
+      const badge=document.querySelector(`.dc-badge[data-id="${deathId}"]`);
+      if(badge){badge.classList.add('earned','just-earned');setTimeout(()=>badge.classList.remove('just-earned'),600);}
+    },100);
+  }
+}
+
+function renderDeathCollector(){
+  document.getElementById('deathCollector').innerHTML=DEATH_TYPES.map(dt=>
+    `<span class="dc-badge${S.deathsEarned.has(dt.id)?' earned':''}" data-id="${dt.id}" data-tip="${dt.label}: ${dt.tip}">${dt.icon}</span>`
+  ).join('');
+}
+
+// ─── ACHIEVEMENTS ─────────────────────────────────────────────────────────────
+const ACH_DEF=[
+  {k:'firstStar',    i:'⭐',n:'First ignition',      d:'Run your first main-sequence star'},
+  {k:'redGiant',     i:'🔴',n:'Red giant risen',     d:'Witness H exhaustion & envelope expansion'},
+  {k:'heliumFlash',  i:'⚡',n:'Flash in the dark',   d:'Trigger a helium flash in a low-mass star (M < 2 M☉)'},
+  {k:'supernova',    i:'💥',n:'Core collapse',        d:'Trigger a Type II core-collapse supernova'},
+  {k:'blackHole',    i:'⚫',n:'Event horizon',       d:'Form a stellar-mass black hole'},
+  {k:'neutronStar',  i:'🔵',n:'Neutron degenerate',  d:'Create a neutron star remnant'},
+  {k:'magnetar',     i:'🧲',n:'Magnetar',            d:'Produce a magnetar: high spin + 8-12 M☉ (v_rot > 300 km/s)'},
+  {k:'whiteDwarf',   i:'⚪',n:'White dwarf ending',  d:'See a low-mass star fade to a white dwarf'},
+  {k:'chandrasekhar',i:'💀',n:'Chandrasekhar limit', d:'Push a WD past 1.44 M☉ via accretion'},
+  {k:'wolfRayet',    i:'🟣',n:'Stripped bare',       d:'Reach the Wolf-Rayet phase'},
+  {k:'lbv',          i:'🟡',n:'LBV eruption',        d:'Witness a Luminous Blue Variable eruption'},
+  {k:'ironCore',     i:'☢', n:'Iron doom',            d:'Build an iron core and trigger collapse'},
+  {k:'brownDwarf',   i:'🟤',n:'Failed star',         d:'Set M < 0.08 M☉ — the brown dwarf threshold'},
+  {k:'pairInstab',   i:'🔥',n:'Total annihilation',  d:'Trigger a pair-instability supernova (M > 130 M☉)'},
+  {k:'allPhases',    i:'🌟',n:'Full lifecycle',       d:'Observe MS + giant + Wolf-Rayet + SN in one run'},
+];
+
+function checkAch(star){
+  const a=S.ach,p=star.phase;
+  a.firstStar=true;
+  if(p==='Red Giant'||p==='Red Supergiant')a.redGiant=true;
+  if(star.heliumFlash)a.heliumFlash=true;
+  if(p==='Supernova')a.supernova=true;
+  if(p==='Black Hole')a.blackHole=true;
+  if(p==='Neutron Star')a.neutronStar=true;
+  if(p==='Magnetar'){a.neutronStar=true;a.magnetar=true;}
+  if(p==='White Dwarf')a.whiteDwarf=true;
+  if(p==='Type Ia Supernova')a.chandrasekhar=true;
+  if(p==='Wolf-Rayet')a.wolfRayet=true;
+  if(p==='LBV')a.lbv=true;
+  if(p==='Supernova'&&star.M0>10)a.ironCore=true;
+  if(star.isBD)a.brownDwarf=true;
+  if(star.isPI)a.pairInstab=true;
+  if(a.redGiant&&a.supernova&&a.wolfRayet)a.allPhases=true;
+  // Update death collector
+  checkDeathCollector(p,star);
+}
+
+function renderAch(){
+  document.getElementById('achList').innerHTML=ACH_DEF.map(a=>{
+    const ok=S.ach[a.k];
+    return`<div class="ar"><span class="ai${ok?' ok':''}">
+    ${a.i}</span><div class="at"><div class="an" style="color:${ok?'var(--text)':'var(--text3)'}">${a.n}</div>
+    <div class="ad">${a.d}</div></div></div>`;
+  }).join('');
+}
+
+// ─── QUIZ ─────────────────────────────────────────────────────────────────────
+function renderQuiz(){
+  const q=QUIZ[S.quizIdx%QUIZ.length];
+  S.quizAnswered=false;
+  document.getElementById('quizContent').innerHTML=`
+    <div class="quiz-panel">
+      <div class="quiz-q">${q.q}</div>
+      <div class="quiz-opts">${q.opts.map((o,i)=>`<button class="qopt" onclick="answerQuiz(${i})">${o}</button>`).join('')}</div>
+      <div style="font-size:9px;color:var(--text3);margin-top:6px">Question ${(S.quizIdx%QUIZ.length)+1} of ${QUIZ.length} | Score: ${S.quizScore}/${S.quizTotal}</div>
+    </div>`;
+}
+function answerQuiz(idx){
+  if(S.quizAnswered)return;
+  S.quizAnswered=true;
+  const q=QUIZ[S.quizIdx%QUIZ.length];
+  const correct=idx===q.ans;
+  S.quizTotal++;if(correct){S.quizScore++;S.massReturned+=5;} // correct = nebula bonus
+  const btns=document.querySelectorAll('.qopt');
+  btns.forEach((b,i)=>{
+    if(i===q.ans)b.classList.add('correct');
+    else if(i===idx&&!correct)b.classList.add('wrong');
+    b.disabled=true;
+  });
+  const panel=document.getElementById('quizContent').querySelector('.quiz-panel');
+  const res=document.createElement('div');
+  res.className='quiz-result';
+  res.style.background=correct?'rgba(64,200,112,.1)':'rgba(240,72,72,.1)';
+  res.style.border=`1px solid ${correct?'var(--green)':'var(--red)'}`;
+  res.innerHTML=`<b style="color:${correct?'var(--green)':'var(--red)'}">${correct?'✓ Correct! +5 M☉ nebula bonus':'✗ Incorrect'}</b><br>${q.expl}<br>
+    <div class="quiz-score">Score: ${S.quizScore}/${S.quizTotal}</div>
+    <button class="btn" style="margin-top:8px;font-size:10px" onclick="nextQuiz()">Next question →</button>`;
+  panel.appendChild(res);
+  updateNebulaHUD();
+}
+function nextQuiz(){S.quizIdx++;renderQuiz();}
+
+// ─── COMPARE PANEL ────────────────────────────────────────────────────────────
+function renderComp(){
+  document.getElementById('compContent').innerHTML=`
+    <div style="font-size:9px;color:var(--text3);margin-bottom:8px">Dot overlay shown on H-R Diagram view. Switch to H-R to see positions.</div>
+    ${REAL_STARS.map(s=>`
+    <div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--border);font-size:10px;">
+      <div style="width:10px;height:10px;border-radius:50%;background:${planckHex(s.T)};flex-shrink:0;margin-top:2px;border:1px solid rgba(255,255,255,0.2)"></div>
+      <div>
+        <div style="color:var(--text);font-weight:700">${s.name} <span style="color:var(--text3);font-weight:400">${s.cls}</span></div>
+        <div style="color:var(--text3)">${s.M} M☉ | ${fmtN(s.L)} L☉ | ${s.T.toLocaleString()} K</div>
+        <div style="color:var(--text3);font-style:italic">${s.note}</div>
+      </div>
+    </div>`).join('')}`;
+}
+
+// ─── NEBULA HUD ───────────────────────────────────────────────────────────────
+function updateNebulaHUD(star){
+  const M0=parseFloat(document.getElementById('sMass').value);
+  const spent=Math.min(M0,S.nebulaMass);
+  const effective=Math.max(0,S.nebulaMass-spent+S.massReturned);
+  const pct=Math.min(100,Math.max(0,(effective/500)*100));
+  document.getElementById('nGas').textContent=effective.toFixed(0)+' M☉';
+  document.getElementById('nGen').textContent='Gen '+S.generation;
+  document.getElementById('nMetZ').textContent='Z='+S.nebulaZ.toFixed(4);
+  document.getElementById('nReturned').textContent='+'+S.massReturned.toFixed(1)+' M☉';
+  document.getElementById('nGasPct').textContent=pct.toFixed(0)+'%';
+  document.getElementById('nGasBar').style.width=pct+'%';
+  renderDeathCollector();
+}
+
+// ─── MAIN UPDATE ─────────────────────────────────────────────────────────────
+function onSlider(){
+  const star=calcStar();
+  updateUI(star);
+  checkEvents(star);
+  checkAch(star);
+  renderAch();
+  updateNebulaHUD(star);
+  if(S.activeSections.math)updateMath(star);
+
+  // Accumulate trail (only in HR view)
+  if(S.view==='hr'){
+    S.trail.push({L:star.Lr,T:star.Teff,col:planckHex(star.Teff),phase:star.phase});
+    if(S.trail.length>800)S.trail.shift();
+  }
+
+  S.lastPhase=star.phase;
+  draw(star);
+}
+
+function updateUI(star){
+  const{M0,M,Lr,Teff,Rr,phase,TMS,tf,Zfrac,feH,spFrac,edd,acc,Md,cno,wienNm,Mdot_wind,WR_THRESH,heliumFlash,isBD,isPI,isMagnetar}=star;
+
+  // header pill
+  const hp=document.getElementById('hPhase');
+  hp.textContent=phase;hp.className='pill';
+  const pm={
+    'Main Sequence':'p-ms','Blue Supergiant':'p-ms',
+    'Red Giant':'p-giant','Red Supergiant':'p-giant','Planetary Nebula':'p-giant',
+    'LBV':'p-lbv','Wolf-Rayet':'p-wr',
+    'Supernova':'p-sn','Type Ia Supernova':'p-sn',
+    'White Dwarf':'p-wd','Neutron Star':'p-ns','Magnetar':'p-ns','Black Hole':'p-bh',
+    'Brown Dwarf':'p-bd','Pair-Instability Supernova':'p-pi',
+  };
+  hp.classList.add(pm[phase]||'p-ms');
+
+  // slider labels
+  document.getElementById('vMass').textContent=M0.toFixed(1)+' M☉';
+  const md=parseFloat(document.getElementById('sAccretion').value);
+  document.getElementById('vAccretion').textContent=md===0?'0':md.toExponential(2)+' M☉/yr';
+  document.getElementById('vRot').textContent=parseFloat(document.getElementById('sRot').value).toFixed(0)+' km/s';
+  const Zdisp=Zfrac.toFixed(4);
+  const feHstr=feH.toFixed(2);
+  document.getElementById('vMetSlider').textContent=`Z=${Zdisp}`;
+
+  // timeline
+  const pct=Math.min(tf*100/1.19,100);
+  document.getElementById('tlFill').style.width=pct+'%';
+  document.getElementById('tlThumb').style.left=pct+'%';
+
+  // time display
+  const tr=star.tReal;
+  let ts=tr>=1e9?(tr/1e9).toFixed(2)+' Gyr':tr>=1e6?(tr/1e6).toFixed(1)+' Myr':tr>=1e3?(tr/1e3).toFixed(0)+' kyr':tr.toFixed(0)+' yr';
+  document.getElementById('vTime').textContent=ts;
+
+  // milestones
+  const ms=getMilestones(M0),curP=pct;
+  document.getElementById('tlMs').innerHTML=ms.map(m=>{
+    const mp=m.pct*(100/119);
+    const on=Math.abs(curP-mp)<7;
+    return`<div class="ms${on?' on':''}" onclick="jumpTo(${m.pct})" title="${m.tip||''}">
+      <div class="msd"></div>${m.label}</div>`;
+  }).join('');
+
+  // stats
+  document.getElementById('sCM').textContent=M.toFixed(2)+' M☉';
+  document.getElementById('sL').textContent=fmtN(Lr)+' L☉';
+  document.getElementById('sT').textContent=Math.round(Teff).toLocaleString()+' K';
+  document.getElementById('sR').textContent=Rr>=1?Rr.toFixed(0)+' R☉':Rr.toFixed(Rr<0.01?5:3)+' R☉';
+  document.getElementById('sSp').textContent=isBD?'L/T (BD)':specFull(Teff);
+  const tStr=TMS>=1e9?(TMS/1e9).toFixed(1)+' Gyr':(TMS/1e6).toFixed(0)+' Myr';
+  document.getElementById('sTMS').textContent=tStr;
+  document.getElementById('sMet2').textContent=`[Fe/H] ${feH>=0?'+':''}${feHstr}`;
+  document.getElementById('sProg').textContent=(tf*100).toFixed(1)+'%';
+
+  // Wien indicator
+  const wMin=200,wMax=1500;
+  const wPct=Math.max(0,Math.min(100,(wienNm-wMin)/(wMax-wMin)*100));
+  document.getElementById('wienPin').style.left=wPct+'%';
+  const wLabel=wienNm<400?`${wienNm}nm (UV)`:wienNm<700?`${wienNm}nm (Visible)`:wienNm<1000?`${wienNm}nm (Near-IR)`:`${wienNm}nm (IR)`;
+  document.getElementById('wienVal').textContent=wLabel;
+
+  // fusion chain
+  document.getElementById('fusionChain').textContent=
+    isBD?'None (below H-fusion threshold)':
+    (phase==='Main Sequence'||phase==='Blue Supergiant')
+      ?(cno?'CNO cycle (∝T¹⁷ — very T-sensitive)':'pp chain (∝T⁴ — less T-sensitive)')
+      :'See shell legend ↓';
+
+  // Wind mass-loss display (live metallicity effect)
+  const wdStr=Mdot_wind<1e-9?'negligible':
+    Mdot_wind<1e-7?Mdot_wind.toExponential(1)+' M☉/yr (weak)':
+    Mdot_wind<1e-5?Mdot_wind.toExponential(1)+' M☉/yr':
+    Mdot_wind.toExponential(1)+' M☉/yr (WR-level)';
+  document.getElementById('windRate').textContent=wdStr;
+
+  // notes
+  const nE=document.getElementById('nEdd'),nA=document.getElementById('nAccr'),nD=document.getElementById('nDang');
+  const nP=document.getElementById('nPair'),nBD=document.getElementById('nBD'),nHF=document.getElementById('nHFlash');
+  nE.style.display=spFrac>0.2?'block':'none';
+  if(spFrac>0.2)nE.textContent=`Eddington-Sweet: +${Math.round((edd-1)*100)}% lifetime | Von Zeipel: T_pole ${Math.round(star.Tp).toLocaleString()}K > T_eq ${Math.round(star.Te).toLocaleString()}K`;
+  nA.style.display=(md>0&&acc>0.01)?'block':'none';
+  if(md>0&&acc>0.01)nA.textContent=`Accreted +${acc.toFixed(3)} M☉ from companion`;
+  const chLim=md>0&&phase==='White Dwarf'&&M>=MACH*0.93;
+  const tovLim=md>0&&phase==='Neutron Star'&&M>=MTOV*0.88;
+  nD.style.display=(chLim||tovLim)?'block':'none';
+  if(chLim)nD.textContent=`⚠ ${((M/MACH)*100).toFixed(1)}% Chandrasekhar — Type Ia imminent!`;
+  else if(tovLim)nD.textContent=`⚠ NS ${M.toFixed(2)}M☉ → ${((M/MTOV)*100).toFixed(1)}% TOV limit → BH!`;
+  nP.style.display=isPI?'block':'none';
+  nBD.style.display=isBD?'block':'none';
+  nHF.style.display=heliumFlash?'block':'none';
+
+  // shell legend
+  document.getElementById('shellLeg').innerHTML=star.shells.map(s=>
+    `<div class="li"><div class="ld" style="background:${s.col}"></div>
+    <div><b style="color:${s.col}">${s.name}</b> — <span style="font-size:9px">${s.rx}</span><br>
+    <span style="color:var(--text3);font-size:9px">${s.T} · P${s.P} · ${s.pct}% vol</span></div></div>`
+  ).join('');
+
+  // death report
+  const dead=['White Dwarf','Neutron Star','Magnetar','Black Hole','Type Ia Supernova','Brown Dwarf','Pair-Instability Supernova'].includes(phase);
+  document.getElementById('deathSec').style.display=dead?'block':'none';
+  if(dead){
+    const cause=phase==='Type Ia Supernova'?'Chandrasekhar limit via accretion':
+      phase==='Pair-Instability Supernova'?'γγ→e⁺e⁻ pair production — TOTAL DESTRUCTION':
+      phase==='Brown Dwarf'?'Insufficient mass for H fusion (<0.08 M☉)':
+      phase==='Magnetar'?'Core collapse + extreme magnetic field (B~10¹⁵ G)':
+      M0<8?'Planetary Nebula ejection':'Core-collapse supernova';
+    const rw=phase==='Black Hole'?'Cygnus X-1 (14.8 M☉ BH)':
+      phase==='Neutron Star'?'Crab Pulsar PSR B0531+21':
+      phase==='Magnetar'?'SGR 1806-20 (2004 giant flare)':
+      phase==='White Dwarf'?'Sirius B (0.98 M☉ DA2)':
+      phase==='Type Ia Supernova'?'SN 2011fe (Type Ia in M101)':
+      phase==='Pair-Instability Supernova'?'SN 2006gy (hypernova candidate)':
+      phase==='Brown Dwarf'?'WISE 1049-5319 (nearest known BD)':'—';
+    const massReturn=phase==='Pair-Instability Supernova'?'100% (complete destruction)':
+      phase==='White Dwarf'?'~50% (PN ejecta)':
+      phase==='Neutron Star'||phase==='Magnetar'?'~90% (SN ejecta)':
+      phase==='Black Hole'?'~20% (jets/disk wind)':
+      phase==='Type Ia Supernova'?'~100% (thermonuclear)':
+      phase==='Brown Dwarf'?'~100% (no consumption)':'—';
+    document.getElementById('deathC').innerHTML=`
+      <div class="drr"><span>Remnant</span><span>${phase}</span></div>
+      <div class="drr"><span>Final mass</span><span>${phase==='Pair-Instability Supernova'?'None (total destruction)':M.toFixed(3)+' M☉'}</span></div>
+      <div class="drr"><span>Cause</span><span style="font-size:9px">${cause}</span></div>
+      <div class="drr"><span>Mass returned</span><span>${massReturn}</span></div>
+      <div class="drr" style="font-size:9px;color:var(--text3)"><span>Real analog</span><span>${rw}</span></div>`;
+  }
+
+  // footer
+  const footExtra=isMagnetar?'MAGNETAR B~10¹⁵G |':isPI?'PAIR-INSTABILITY |':isBD?'BROWN DWARF |':'';
+  document.getElementById('fLive').textContent=`${footExtra} ${phase} | ${isBD?'L/T (BD)':specFull(Teff)} | L=${fmtN(Lr)}L☉ | T=${Math.round(Teff).toLocaleString()}K | M=${M.toFixed(2)}M☉ | WR threshold=${WR_THRESH.toFixed(0)} M☉`;
+}
+
+function updateMath(star){
+  const{M0,M,Lr,Teff,Rr,TMS,wienNm,cno,edd,Zfrac,feH,Mdot_wind,WR_THRESH,Zratio}=star;
+  const Labs=(Lr*LSUN).toExponential(2);
+  const Rkm=(Rr*RSUN/1000).toExponential(2);
+  const LEdd=(3.2e4*M0).toExponential(2);
+  document.getElementById('eqBlocks').innerHTML=`
+    <div class="eqb"><div class="eqn">Mass-Luminosity Law (main sequence)</div>
+      <div class="eqf">L/L☉ = (M/M☉)³·⁵</div>
+      <div class="eqs">= (${M0.toFixed(1)})³·⁵ = ${fmtN(Math.pow(M0,3.5))} L☉</div></div>
+    <div class="eqb"><div class="eqn">Main Sequence Lifetime (with Z and rotation corrections)</div>
+      <div class="eqf">T_MS = 13×10⁹ × M⁻²·⁵ × ${edd.toFixed(2)}(rot.) × ${(1+0.08*(1-Math.min(Zratio,2))).toFixed(2)}(Z)</div>
+      <div class="eqs">= ${TMS>=1e9?(TMS/1e9).toFixed(2)+' Gyr':(TMS/1e6).toFixed(0)+' Myr'}</div></div>
+    <div class="eqb"><div class="eqn">Stefan-Boltzmann Law</div>
+      <div class="eqf">L = 4πσR²T⁴</div>
+      <div class="eqs">L=${Labs} W | R=${Rkm} km | T=${Math.round(Teff).toLocaleString()}K</div></div>
+    <div class="eqb"><div class="eqn">Wien's Displacement Law</div>
+      <div class="eqf">λ_max = 2,897,771 / T nm</div>
+      <div class="eqs">= ${wienNm} nm (${wienNm<400?'UV — ionizing radiation':wienNm<700?'Visible light':'Infrared — heat radiation'})</div></div>
+    <div class="eqb"><div class="eqn">Wind Mass-Loss (Vink et al. 2001)</div>
+      <div class="eqf">Ṁ_wind ∝ Z⁰·⁷ = Ṁ_base × (Z/Z☉)⁰·⁷</div>
+      <div class="eqs">Z=${Zfrac.toFixed(4)} [Fe/H]=${feH.toFixed(2)} | Ṁ=${Mdot_wind.toExponential(1)} M☉/yr</div></div>
+    <div class="eqb"><div class="eqn">Wolf-Rayet Threshold (Z-dependent)</div>
+      <div class="eqf">M_WR = 25 + 15×(1 − Z/Z☉) M☉</div>
+      <div class="eqs">At current Z: WR threshold = ${WR_THRESH.toFixed(1)} M☉</div></div>
+    <div class="eqb"><div class="eqn">Eddington Luminosity Limit</div>
+      <div class="eqf">L_Edd = 3.2×10⁴ × (M/M☉) L☉</div>
+      <div class="eqs">= ${LEdd} L☉ | Current L = ${fmtN(Lr)} L☉ (${(Lr/(3.2e4*M0)*100).toFixed(1)}% of limit)</div></div>
+    <div class="eqb"><div class="eqn">Active H-fusion pathway</div>
+      <div class="eqf">${cno?'CNO cycle: ¹²C→¹³N→¹³C→¹⁴N→¹⁵O→¹⁵N→¹²C+⁴He':'pp chain: 4¹H → ⁴He + 2e⁺ + 2νₑ'}</div>
+      <div class="eqs">${cno?'Rate ∝ T¹⁷ — exponentially T-sensitive (M > 1.3 M☉)':'Rate ∝ T⁴ — less T-sensitive (M < 1.3 M☉)'}</div></div>
+    <div class="eqb"><div class="eqn">Schwarzschild radius / Pair-instability threshold</div>
+      <div class="eqf">r_s = 2GM/c² ≈ 2.95 × M/M☉ km  |  M_PI > 130 M☉</div>
+      <div class="eqs">r_s = ${(2.95*M).toFixed(2)} km for M=${M.toFixed(2)} M☉</div></div>`;
+}
+
+// ─── DRAWING ─────────────────────────────────────────────────────────────────
+let raf=null;
+function draw(star){
+  if(!star)star=calcStar();
+  if(raf)cancelAnimationFrame(raf);
+  raf=requestAnimationFrame(()=>{
+    const W=canvas.width,H=canvas.height;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#05080f';ctx.fillRect(0,0,W,H);
+    drawStars(W,H);
+    if(S.view==='hr')drawHR(W,H,star);
+    else if(S.view==='onion')drawOnion(W,H,star);
+    else drawStar(W,H,star);
+  });
+}
+
+function drawStars(W,H){
+  for(let i=0;i<200;i++){
+    const x=((Math.sin(i*137.508)*0.5+0.5)*W);
+    const y=((Math.cos(i*97.38)*0.5+0.5)*H);
+    const a=0.12+(i%5)*0.05,r=0.3+(i%3)*0.35;
+    ctx.fillStyle=`rgba(220,230,255,${a})`;
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  }
+}
+
+// ── STAR VIEW ─────────────────────────────────────────────────────────────────
+function drawStar(W,H,star){
+  const cx=W/2,cy=H/2;
+  const{phase,Rr,Teff,ob,spFrac,Tp,Te,M,Md,M0,tf,heliumFlash,isMagnetar,isBD,vr}=star;
+  const col=planckHex(Teff);
+  const t=Date.now();
+
+  if(phase==='Black Hole'){drawBH(cx,cy,M);return;}
+  if(phase==='Pair-Instability Supernova'){drawPISN(cx,cy,W,H);return;}
+  if(phase==='Supernova'||phase==='Type Ia Supernova'){drawSN(cx,cy,W,H,phase);return;}
+  if(phase==='Brown Dwarf'){drawBrownDwarf(cx,cy,W,H,star);return;}
+  if(isMagnetar){drawMagnetar(cx,cy,W,H,M,t);return;}
+
+  const baseR=phase==='Neutron Star'?10:phase==='White Dwarf'?22
+    :Math.min(165,Math.max(18,30*Math.pow(Rr,0.22)));
+  const rx=baseR*ob.eq, ry=baseR*ob.pol;
+  const lr=Math.max(rx,ry);
+
+  // ── Helium flash pulse ────────────────────────────────────────────────────
+  if(heliumFlash){
+    const flashPulse=0.5+0.5*Math.sin(t/80);
+    const fg=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR*6);
+    fg.addColorStop(0,`rgba(255,255,220,${0.4*flashPulse})`);
+    fg.addColorStop(0.5,`rgba(255,200,100,${0.2*flashPulse})`);
+    fg.addColorStop(1,'transparent');
+    ctx.fillStyle=fg;ctx.beginPath();ctx.arc(cx,cy,baseR*6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=`rgba(255,240,150,${0.7*flashPulse})`;ctx.font='bold 11px Syne,sans-serif';ctx.textAlign='center';
+    ctx.fillText('⚡ HELIUM FLASH — ~10¹¹ L☉ for seconds (invisible at surface)',cx,cy-lr-30);
+    requestAnimationFrame(()=>{if(S.view==='star')draw();});
+  }
+
+  // ── PN proto-WD at center ──────────────────────────────────────────────────
+  if(phase==='Planetary Nebula'){
+    const pnAge=Math.max(0,Math.min(1,(tf-1.12)/0.06)); // 0→1 over PN phase
+    // Expanding color shells
+    const shellCols=['rgba(80,200,255,0.18)','rgba(180,100,255,0.15)','rgba(255,150,50,0.12)'];
+    for(let ring=0;ring<3;ring++){
+      const nr=Math.max(20,rx*(1.8+ring*0.9+pnAge*1.5));
+      const ng=ctx.createRadialGradient(cx,cy,nr*0.8,cx,cy,nr);
+      ng.addColorStop(0,'transparent');
+      ng.addColorStop(0.6,shellCols[ring]);
+      ng.addColorStop(1,'transparent');
+      ctx.fillStyle=ng;ctx.beginPath();ctx.arc(cx,cy,nr,0,Math.PI*2);ctx.fill();
+    }
+    // Proto-WD at center — brightens and blueshifts as PN progresses
+    const protoR=Math.max(4,12*(1-pnAge*0.5));
+    const protoT=Math.min(150000,8000*(1+pnAge*15)); // heats from ~8000K to ~120000K
+    const protoCol=planckHex(Math.min(40000,protoT));
+    const protogrd=ctx.createRadialGradient(cx,cy,0,cx,cy,protoR*2.5);
+    protogrd.addColorStop(0,'#ffffff');
+    protogrd.addColorStop(0.4,protoCol);
+    protogrd.addColorStop(1,protoCol+'44');
+    ctx.fillStyle=protogrd;ctx.beginPath();ctx.arc(cx,cy,protoR*2.5,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(cx,cy,protoR,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(200,220,255,0.7)';ctx.font='9px Space Mono';ctx.textAlign='center';
+    ctx.fillText('proto-WD core',cx,cy+protoR+16);
+    ctx.fillText(`T≈${Math.round(protoT/1000)}kK`,cx,cy+protoR+28);
+    return;
+  }
+
+  // ── Outer nebula / wind shell for giant phases ────────────────────────────
+  if(phase==='Red Giant'||phase==='Red Supergiant'){
+    const ng=ctx.createRadialGradient(cx,cy,rx*1.2,cx,cy,rx*4.5);
+    ng.addColorStop(0,'rgba(255,100,40,0.08)');ng.addColorStop(1,'transparent');
+    ctx.fillStyle=ng;ctx.beginPath();ctx.arc(cx,cy,rx*4.5,0,Math.PI*2);ctx.fill();
+  }
+  if(phase==='LBV'){
+    for(let i=0;i<6;i++){
+      const a=(i/6)*Math.PI*2 + t/8000;
+      const r=rx*(2.5+Math.sin(t/2000+i)*0.6);
+      const lg=ctx.createRadialGradient(cx,cy,rx,cx+Math.cos(a)*rx*1.5,cy+Math.sin(a)*rx*1.5,r);
+      lg.addColorStop(0,'rgba(240,200,60,0.12)');lg.addColorStop(1,'transparent');
+      ctx.fillStyle=lg;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // ── WR stellar wind ───────────────────────────────────────────────────────
+  if(phase==='Wolf-Rayet'||(phase==='Blue Supergiant'&&M0>40)){
+    const tSec=t/1400;
+    for(let i=0;i<18;i++){
+      const a=(i/18)*Math.PI*2+tSec*0.15;
+      const sr=rx*1.05, er=rx*(1.8+Math.sin(tSec+i*0.6)*0.7);
+      const opacity=0.06+((i%4)*0.03);
+      ctx.strokeStyle=phase==='Wolf-Rayet'?`rgba(160,96,240,${opacity})`:`rgba(100,160,255,${opacity})`;
+      ctx.lineWidth=0.8;
+      ctx.beginPath();
+      ctx.moveTo(cx+Math.cos(a)*sr,cy+Math.sin(a)*sr*(ry/rx));
+      ctx.lineTo(cx+Math.cos(a)*er,cy+Math.sin(a)*er*(ry/rx));
+      ctx.stroke();
+    }
+    ctx.fillStyle='rgba(160,96,240,0.5)';ctx.font='9px Space Mono';ctx.textAlign='center';
+    ctx.fillText('Ṁ_wind ≈ 10⁻⁵ M☉/yr',cx,cy-lr-20);
+  }
+
+  // ── Main glow ─────────────────────────────────────────────────────────────
+  const grd=ctx.createRadialGradient(cx,cy,0,cx,cy,rx*3.5);
+  grd.addColorStop(0,planckCSS(Teff,0.55));
+  grd.addColorStop(0.35,planckCSS(Teff,0.18));
+  grd.addColorStop(1,'transparent');
+  ctx.fillStyle=grd;ctx.beginPath();ctx.ellipse(cx,cy,rx*3.5,ry*3.5,0,0,Math.PI*2);ctx.fill();
+
+  // ── Star body with limb darkening ─────────────────────────────────────────
+  const brd=ctx.createRadialGradient(cx-rx*0.2,cy-ry*0.2,0,cx,cy,Math.max(rx,ry)*1.05);
+  brd.addColorStop(0,'#ffffff');
+  brd.addColorStop(0.15,col);
+  brd.addColorStop(0.65,col+'cc');
+  brd.addColorStop(1,col+'44');
+  ctx.fillStyle=brd;ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.fill();
+
+  // ── Surface texture ───────────────────────────────────────────────────────
+  if(Teff<5500&&baseR>30&&phase!=='White Dwarf'&&phase!=='Neutron Star'){
+    const ncells=Math.floor(6+M0*0.3);
+    for(let i=0;i<ncells;i++){
+      const seed=i*137.508+tf*10;
+      const a=(seed%1)*Math.PI*2;
+      const cr=rx*(0.15+((seed*73)%100)/400);
+      const lx=cx+Math.cos(a)*rx*0.55, ly=cy+Math.sin(a)*ry*0.55;
+      ctx.strokeStyle=`rgba(255,${Math.floor(80+i*8)},20,0.07)`;ctx.lineWidth=1;
+      ctx.beginPath();ctx.ellipse(lx,ly,cr*ob.eq,cr*ob.pol,0,0,Math.PI*2);ctx.stroke();
+    }
+  }
+  if(Teff>15000&&baseR>20){
+    for(let i=0;i<8;i++){
+      const a=(i/8)*Math.PI*2+t/3000;
+      const pr=rx*(0.5+Math.sin(a*3)*0.3);
+      ctx.strokeStyle='rgba(180,210,255,0.04)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(cx+Math.cos(a)*pr*0.3,cy+Math.sin(a)*pr*0.3,pr*0.4,0,Math.PI*2);ctx.stroke();
+    }
+  }
+
+  // ── Von Zeipel ────────────────────────────────────────────────────────────
+  if(spFrac>0.2){
+    const pg=ctx.createRadialGradient(cx,cy-ry*0.6,0,cx,cy-ry*0.3,ry*0.75);
+    pg.addColorStop(0,'rgba(255,255,255,0.35)');pg.addColorStop(1,'transparent');
+    ctx.fillStyle=pg;ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.fill();
+    const pg2=ctx.createRadialGradient(cx,cy+ry*0.6,0,cx,cy+ry*0.3,ry*0.65);
+    pg2.addColorStop(0,'rgba(255,255,255,0.2)');pg2.addColorStop(1,'transparent');
+    ctx.fillStyle=pg2;ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.fill();
+    ctx.save();ctx.beginPath();ctx.ellipse(cx,cy,rx*1.35,ry*0.22,0,0,Math.PI*2);
+    ctx.clip();ctx.fillStyle='rgba(0,0,0,0.18)';ctx.fillRect(cx-rx*1.5,cy-ry,rx*3,ry*2);ctx.restore();
+    ctx.strokeStyle='rgba(74,138,240,0.25)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.ellipse(cx,cy,rx*1.3,ry*0.24,0,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='rgba(170,200,240,0.8)';ctx.font='9px Space Mono';ctx.textAlign='center';
+    ctx.fillText(`▲ T_pole ${Math.round(Tp).toLocaleString()}K`,cx,cy-ry-16);
+    ctx.fillText(`▼ T_eq ${Math.round(Te).toLocaleString()}K`,cx,cy+ry+22);
+  }
+
+  // ── NEUTRON STAR ──────────────────────────────────────────────────────────
+  if(phase==='Neutron Star'){
+    const nsG=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR);
+    nsG.addColorStop(0,'#e8f4ff');nsG.addColorStop(0.5,'#90c8ff');nsG.addColorStop(1,'#4090d0');
+    ctx.fillStyle=nsG;ctx.beginPath();ctx.arc(cx,cy,baseR,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(150,210,255,0.6)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(cx,cy,baseR,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='rgba(48,200,240,0.35)';ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.ellipse(cx,cy,baseR*6,baseR*0.65,-0.2,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='rgba(48,200,240,0.15)';ctx.lineWidth=0.8;
+    ctx.beginPath();ctx.ellipse(cx,cy,baseR*8,baseR*0.5,-0.2,0,Math.PI*2);ctx.stroke();
+    const jetLen=Math.min(H*0.42,200);
+    const njG=ctx.createLinearGradient(cx,cy-baseR,cx,cy-baseR-jetLen);
+    njG.addColorStop(0,'rgba(100,220,255,0.9)');njG.addColorStop(0.3,'rgba(80,180,255,0.6)');
+    njG.addColorStop(0.7,'rgba(60,140,255,0.25)');njG.addColorStop(1,'rgba(40,100,255,0)');
+    ctx.strokeStyle=njG;ctx.lineWidth=10;
+    ctx.beginPath();ctx.moveTo(cx,cy-baseR);ctx.lineTo(cx,cy-baseR-jetLen);ctx.stroke();
+    const njC=ctx.createLinearGradient(cx,cy-baseR,cx,cy-baseR-jetLen*0.85);
+    njC.addColorStop(0,'rgba(220,240,255,1)');njC.addColorStop(0.4,'rgba(140,210,255,0.8)');njC.addColorStop(1,'rgba(80,160,255,0)');
+    ctx.strokeStyle=njC;ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(cx,cy-baseR);ctx.lineTo(cx,cy-baseR-jetLen*0.85);ctx.stroke();
+    const sjG=ctx.createLinearGradient(cx,cy+baseR,cx,cy+baseR+jetLen);
+    sjG.addColorStop(0,'rgba(100,220,255,0.9)');sjG.addColorStop(0.3,'rgba(80,180,255,0.6)');
+    sjG.addColorStop(0.7,'rgba(60,140,255,0.25)');sjG.addColorStop(1,'rgba(40,100,255,0)');
+    ctx.strokeStyle=sjG;ctx.lineWidth=10;
+    ctx.beginPath();ctx.moveTo(cx,cy+baseR);ctx.lineTo(cx,cy+baseR+jetLen);ctx.stroke();
+    const sjC=ctx.createLinearGradient(cx,cy+baseR,cx,cy+baseR+jetLen*0.85);
+    sjC.addColorStop(0,'rgba(220,240,255,1)');sjC.addColorStop(0.4,'rgba(140,210,255,0.8)');sjC.addColorStop(1,'rgba(80,160,255,0)');
+    ctx.strokeStyle=sjC;ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(cx,cy+baseR);ctx.lineTo(cx,cy+baseR+jetLen*0.85);ctx.stroke();
+    const beamAngle=(t/800)%(Math.PI*2);
+    ctx.strokeStyle='rgba(180,240,255,0.12)';ctx.lineWidth=20;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(beamAngle)*150,cy+Math.sin(beamAngle)*150);ctx.stroke();
+    ctx.fillStyle='rgba(180,210,240,0.7)';ctx.font='9px Space Mono';ctx.textAlign='center';
+    ctx.fillText(`Neutron Star | ~10 km radius | ρ ≈ 10¹⁷ kg/m³`,cx,cy+baseR+jetLen+22);
+    ctx.fillText(`M = ${M.toFixed(2)} M☉ | B ~ 10¹²⁻¹³ G`,cx,cy+baseR+jetLen+36);
+    return;
+  }
+
+  // ── WHITE DWARF ───────────────────────────────────────────────────────────
+  if(phase==='White Dwarf'){
+    const wdG=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR);
+    wdG.addColorStop(0,'#f0f8ff');wdG.addColorStop(0.6,'#c8e0ff');wdG.addColorStop(1,'#90b8e0');
+    ctx.fillStyle=wdG;ctx.beginPath();ctx.arc(cx,cy,baseR,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(200,220,255,0.2)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(cx,cy,baseR*2.5,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='rgba(200,220,255,0.08)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(cx,cy,baseR*4,0,Math.PI*2);ctx.stroke();
+  }
+
+  // ── ACCRETION DISK ────────────────────────────────────────────────────────
+  if(Md>0&&['White Dwarf','Neutron Star'].includes(phase)){
+    const dg=ctx.createRadialGradient(cx,cy,baseR*1.1,cx,cy,baseR*7);
+    dg.addColorStop(0,'rgba(255,240,100,0.95)');dg.addColorStop(0.3,'rgba(255,150,40,0.6)');
+    dg.addColorStop(0.7,'rgba(200,60,10,0.25)');dg.addColorStop(1,'rgba(100,20,5,0)');
+    ctx.fillStyle=dg;ctx.beginPath();ctx.ellipse(cx,cy,baseR*7,baseR*1.1,0,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(255,220,100,0.5)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.ellipse(cx,cy,baseR*2,baseR*0.35,0,0,Math.PI*2);ctx.stroke();
+  }
+
+  // ── Generic labels ────────────────────────────────────────────────────────
+  ctx.fillStyle='rgba(220,230,250,0.85)';ctx.font='12px Syne,sans-serif';ctx.textAlign='center';
+  ctx.fillText(phase,cx,cy+lr+24);
+  ctx.fillStyle='rgba(120,150,190,0.7)';ctx.font='10px Space Mono';
+  ctx.fillText(`${specFull(Teff)} | ${Math.round(Teff).toLocaleString()}K | ${Rr>=100?Rr.toFixed(0):Rr>=1?Rr.toFixed(1):Rr.toFixed(3)} R☉`,cx,cy+lr+40);
+  if(spFrac>0.05){
+    ctx.fillStyle='rgba(100,150,200,0.5)';ctx.font='9px Space Mono';
+    ctx.fillText(`v_rot = ${Math.round(vr)} km/s | oblate: a/b = ${(ob.eq/ob.pol).toFixed(2)}`,cx,cy+lr+54);
+  }
+  if(['Wolf-Rayet','LBV','Red Giant','Red Supergiant'].includes(phase)||heliumFlash){
+    requestAnimationFrame(()=>{if(S.view==='star')draw();});
+  }
+}
+
+// ── MAGNETAR ──────────────────────────────────────────────────────────────────
+function drawMagnetar(cx,cy,W,H,M,t){
+  const baseR=10;
+  // Intense magnetic field visualization
+  const pulse=0.5+0.5*Math.sin(t/200);
+  // Magnetosphere — much stronger than NS
+  for(let ring=0;ring<4;ring++){
+    const rr=baseR*(4+ring*2.5);
+    ctx.strokeStyle=`rgba(255,100,255,${0.4-ring*0.08})`;ctx.lineWidth=2-ring*0.3;
+    ctx.beginPath();ctx.ellipse(cx,cy,rr,rr*0.2,-0.15,0,Math.PI*2);ctx.stroke();
+  }
+  // Giant flare burst (animated)
+  if(Math.floor(t/2000)%3===0){
+    const flareR=baseR*(3+pulse*8);
+    const flareG=ctx.createRadialGradient(cx,cy,0,cx,cy,flareR);
+    flareG.addColorStop(0,`rgba(255,100,255,${0.6*pulse})`);
+    flareG.addColorStop(0.5,`rgba(200,50,255,${0.3*pulse})`);
+    flareG.addColorStop(1,'transparent');
+    ctx.fillStyle=flareG;ctx.beginPath();ctx.arc(cx,cy,flareR,0,Math.PI*2);ctx.fill();
+  }
+  // NS core
+  const nsG=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR);
+  nsG.addColorStop(0,'#ffffff');nsG.addColorStop(0.4,'#ffaaff');nsG.addColorStop(1,'#cc44ff');
+  ctx.fillStyle=nsG;ctx.beginPath();ctx.arc(cx,cy,baseR,0,Math.PI*2);ctx.fill();
+  // Polar jets — purple/magenta for magnetar
+  const jetLen=Math.min(H*0.4,180);
+  const mjG=ctx.createLinearGradient(cx,cy-baseR,cx,cy-baseR-jetLen);
+  mjG.addColorStop(0,'rgba(255,150,255,0.9)');mjG.addColorStop(0.5,'rgba(200,80,255,0.5)');mjG.addColorStop(1,'transparent');
+  ctx.strokeStyle=mjG;ctx.lineWidth=8;
+  ctx.beginPath();ctx.moveTo(cx,cy-baseR);ctx.lineTo(cx,cy-baseR-jetLen);ctx.stroke();
+  const mjG2=ctx.createLinearGradient(cx,cy+baseR,cx,cy+baseR+jetLen);
+  mjG2.addColorStop(0,'rgba(255,150,255,0.9)');mjG2.addColorStop(0.5,'rgba(200,80,255,0.5)');mjG2.addColorStop(1,'transparent');
+  ctx.strokeStyle=mjG2;ctx.lineWidth=8;
+  ctx.beginPath();ctx.moveTo(cx,cy+baseR);ctx.lineTo(cx,cy+baseR+jetLen);ctx.stroke();
+  ctx.fillStyle='rgba(255,150,255,0.9)';ctx.font='bold 12px Syne,sans-serif';ctx.textAlign='center';
+  ctx.fillText('MAGNETAR',cx,cy+baseR+jetLen+20);
+  ctx.fillStyle='rgba(200,150,255,0.7)';ctx.font='9px Space Mono';
+  ctx.fillText(`B ~ 10¹⁵ G | M = ${M.toFixed(2)} M☉`,cx,cy+baseR+jetLen+35);
+  ctx.fillText('2004 SGR 1806-20 flare outshone entire Milky Way',cx,cy+baseR+jetLen+50);
+  requestAnimationFrame(()=>{if(S.view==='star')draw();});
+}
+
+// ── BROWN DWARF ───────────────────────────────────────────────────────────────
+function drawBrownDwarf(cx,cy,W,H,star){
+  const{Rr,tf}=star;
+  const baseR=Math.max(16,25*Math.pow(Rr/0.1,0.5));
+  const cool=Math.min(tf/0.3,1);
+  // Color shifts from red-orange to dark brown as it cools
+  const r=Math.round(180-cool*60);
+  const g=Math.round(80-cool*50);
+  const b=Math.round(40-cool*20);
+  const col=`rgb(${r},${g},${b})`;
+  const grd=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR);
+  grd.addColorStop(0,`rgb(${r+40},${g+20},${b+10})`);
+  grd.addColorStop(0.6,col);
+  grd.addColorStop(1,`rgb(${r-30},${g-20},${b-10})`);
+  ctx.fillStyle=grd;ctx.beginPath();ctx.arc(cx,cy,baseR,0,Math.PI*2);ctx.fill();
+  // Faint outer glow
+  const glowG=ctx.createRadialGradient(cx,cy,baseR,cx,cy,baseR*3);
+  glowG.addColorStop(0,`rgba(${r},${g},${b},0.15)`);
+  glowG.addColorStop(1,'transparent');
+  ctx.fillStyle=glowG;ctx.beginPath();ctx.arc(cx,cy,baseR*3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(200,180,150,0.85)';ctx.font='bold 12px Syne,sans-serif';ctx.textAlign='center';
+  ctx.fillText('Brown Dwarf',cx,cy+baseR+22);
+  const spectypes=['M','L','T'];
+  const specI=Math.min(2,Math.floor(cool*3));
+  ctx.fillStyle='rgba(160,140,110,0.7)';ctx.font='10px Space Mono';
+  ctx.fillText(`Type ${spectypes[specI]} | Slowly cooling | No H fusion`,cx,cy+baseR+38);
+  ctx.fillText(`M = ${star.M.toFixed(3)} M☉ (${Math.round(star.M*1048)} M_Jup)`,cx,cy+baseR+52);
+  ctx.fillText('M_min(H fusion) = 0.08 M☉ = 80 M_Jup',cx,cy+baseR+65);
+}
+
+function drawBH(cx,cy,M){
+  const rs=28;
+  const dg=ctx.createRadialGradient(cx,cy,rs,cx,cy,rs*5.5);
+  dg.addColorStop(0,'rgba(255,200,80,.85)');dg.addColorStop(.5,'rgba(200,80,20,.4)');dg.addColorStop(1,'rgba(100,20,5,0)');
+  ctx.fillStyle=dg;ctx.beginPath();ctx.ellipse(cx,cy,rs*5.5,rs*0.85,0,0,Math.PI*2);ctx.fill();
+  const jg=ctx.createLinearGradient(cx,cy,cx,cy-160);
+  jg.addColorStop(0,'rgba(168,85,247,0.4)');jg.addColorStop(1,'transparent');
+  ctx.strokeStyle=jg;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(cx,cy-rs);ctx.lineTo(cx,cy-160);ctx.stroke();
+  const jg2=ctx.createLinearGradient(cx,cy,cx,cy+160);
+  jg2.addColorStop(0,'rgba(168,85,247,0.4)');jg2.addColorStop(1,'transparent');
+  ctx.strokeStyle=jg2;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(cx,cy+rs);ctx.lineTo(cx,cy+160);ctx.stroke();
+  ctx.strokeStyle='rgba(255,220,100,.4)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(cx,cy,rs*1.5,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='rgba(255,200,80,.15)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(cx,cy,rs*2.2,0,Math.PI*2);ctx.stroke();
+  const sg=ctx.createRadialGradient(cx,cy,0,cx,cy,rs*3.5);
+  sg.addColorStop(0,'rgba(0,0,0,1)');sg.addColorStop(.55,'rgba(0,0,0,.9)');sg.addColorStop(.85,'rgba(0,0,0,.25)');sg.addColorStop(1,'transparent');
+  ctx.fillStyle=sg;ctx.beginPath();ctx.arc(cx,cy,rs*3.5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(cx,cy,rs,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(220,230,250,.8)';ctx.font='12px Syne,sans-serif';ctx.textAlign='center';
+  ctx.fillText('Black Hole',cx,cy+rs*5.5+18);
+  ctx.fillStyle='rgba(120,150,190,.6)';ctx.font='10px Space Mono';
+  ctx.fillText(`r_s = ${(2.95*M).toFixed(1)} km | M = ${M.toFixed(2)} M☉`,cx,cy+rs*5.5+34);
+}
+
+function drawSN(cx,cy,W,H,phase){
+  S.snAnim=(S.snAnim||0)+1;
+  const t=(S.snAnim%240)/240;
+  for(let i=8;i>0;i--){
+    const r=(i/8)*240+t*30;
+    const a=((8-i)/8)*0.5;
+    const hue=20+(8-i)*10;
+    ctx.strokeStyle=`hsla(${hue},100%,65%,${a})`;ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+  }
+  const cg=ctx.createRadialGradient(cx,cy,0,cx,cy,80);
+  cg.addColorStop(0,'#ffffff');cg.addColorStop(.25,'#fffcdd');cg.addColorStop(.6,'#ff9900');cg.addColorStop(1,'rgba(255,60,0,0)');
+  ctx.fillStyle=cg;ctx.beginPath();ctx.arc(cx,cy,80,0,Math.PI*2);ctx.fill();
+  // Neutrino burst wavefront (ghostly, slightly larger)
+  const nuR=260+t*40;
+  ctx.strokeStyle=`rgba(100,255,200,${0.08*(1-t)})`;ctx.lineWidth=3;ctx.setLineDash([4,8]);
+  ctx.beginPath();ctx.arc(cx,cy,nuR,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(100,255,200,0.5)';ctx.font='8px Space Mono';ctx.textAlign='center';
+  ctx.fillText('← neutrino burst precedes light by hours (SN1987A confirmed)',cx,cy-nuR-6);
+  ctx.fillStyle='rgba(255,255,255,.9)';ctx.font='bold 14px Syne,sans-serif';
+  ctx.fillText(phase.toUpperCase(),cx,cy+110);
+  ctx.fillStyle='rgba(255,200,100,.7)';ctx.font='10px Space Mono';
+  ctx.fillText('E_ν ≈ 3×10⁵³ erg in 10 seconds (99% of SN energy)',cx,cy+128);
+  requestAnimationFrame(()=>{if(S.view==='star')draw();});
+}
+
+// ── PAIR-INSTABILITY SN (distinct from core-collapse) ─────────────────────────
+function drawPISN(cx,cy,W,H){
+  S.piAnim=(S.piAnim||0)+1;
+  const t=(S.piAnim%320)/320;
+  // Massive expanding rings — brighter, more rings, different color palette
+  for(let i=12;i>0;i--){
+    const r=(i/12)*Math.min(W,H)*0.48+t*50;
+    const a=((12-i)/12)*0.6;
+    const hue=280+(12-i)*7; // purple to orange
+    ctx.strokeStyle=`hsla(${hue},100%,70%,${a})`;ctx.lineWidth=3;
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+  }
+  // Void at center (no remnant) — dark hole that expands
+  const voidR=30+t*80;
+  ctx.fillStyle='rgba(0,0,0,0.9)';ctx.beginPath();ctx.arc(cx,cy,voidR,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(255,50,50,0.5)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(cx,cy,voidR,0,Math.PI*2);ctx.stroke();
+  // Labels
+  ctx.fillStyle='rgba(255,80,80,0.95)';ctx.font='bold 15px Syne,sans-serif';ctx.textAlign='center';
+  ctx.fillText('PAIR-INSTABILITY SUPERNOVA',cx,cy+Math.min(W,H)*0.48+30);
+  ctx.fillStyle='rgba(255,150,150,0.8)';ctx.font='10px Space Mono';
+  ctx.fillText('γγ → e⁺e⁻   Radiation pressure removed — total destruction',cx,cy+Math.min(W,H)*0.48+48);
+  ctx.fillText('NO REMNANT — star completely annihilated | M > 130 M☉',cx,cy+Math.min(W,H)*0.48+63);
+  ctx.fillStyle='rgba(200,100,100,0.7)';ctx.font='9px Space Mono';
+  ctx.fillText('Dark void = no neutron star, no black hole — complete destruction',cx,cy);
+  requestAnimationFrame(()=>{if(S.view==='star')draw();});
+}
+
+// ── ONION SHELL ───────────────────────────────────────────────────────────────
+function drawOnion(W,H,star){
+  const cx=W/2, cy=H/2+10;
+  const{shells,M0,tf,phase}=star;
+
+  if(M0<10){
+    const r=Math.min(W,H)*0.22;
+    if(tf>0.5){
+      const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,r*0.45);
+      grad.addColorStop(0,'#20c090ff');grad.addColorStop(1,'#20c09088');
+      ctx.fillStyle=grad;ctx.beginPath();ctx.arc(cx,cy,r*0.45,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(5,8,15,.5)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,r*0.45,0,Math.PI*2);ctx.stroke();
+    }
+    const hg=ctx.createRadialGradient(cx,cy,tf>0.5?r*0.45:0,cx,cy,r);
+    hg.addColorStop(0,'#4a8af0bb');hg.addColorStop(1,'#4a8af066');
+    ctx.fillStyle=hg;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(5,8,15,.5)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='#4a8af0';ctx.font='bold 12px Syne,sans-serif';ctx.textAlign='center';
+    ctx.fillText('H',cx,cy+(tf>0.5?r*0.75:r*0.5)+5);
+    if(tf>0.5){ctx.fillStyle='#20c090';ctx.fillText('He',cx,cy-r*0.15+5);}
+    ctx.fillStyle='rgba(200,210,240,.5)';ctx.font='11px Syne,sans-serif';
+    ctx.fillText('Low-mass stars (<10 M☉) only develop H and He layers',cx,cy+r+26);
+    ctx.fillStyle='rgba(100,130,170,.4)';ctx.font='10px Space Mono';
+    ctx.fillText('Set M > 10 M☉ to see full onion structure',cx,cy+r+44);
+    return;
+  }
+
+  const maxR=Math.min(W,H)*0.30;
+  const n=shells.length;
+  const outerEdge=[];
+  let cumFromOutside=0;
+  for(let i=0;i<n;i++){
+    outerEdge[i]=maxR*(1-cumFromOutside);
+    cumFromOutside+=shells[i].frac;
+  }
+  const innerEdge=outerEdge.map((_,i)=>i<n-1?outerEdge[i+1]:0);
+
+  for(let i=0;i<n;i++){
+    const rOuter=outerEdge[i];
+    const sh=shells[i];
+    const grad=ctx.createRadialGradient(cx,cy,Math.max(0,innerEdge[i]-2),cx,cy,rOuter);
+    grad.addColorStop(0,sh.col+'ff');
+    grad.addColorStop(0.7,sh.col+'ee');
+    grad.addColorStop(1,sh.col+'99');
+    ctx.fillStyle=grad;
+    ctx.beginPath();ctx.arc(cx,cy,rOuter,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(5,8,15,.6)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(cx,cy,rOuter,0,Math.PI*2);ctx.stroke();
+  }
+
+  // Pressure gradient bar
+  const bx=cx+maxR+55,by=cy-maxR,bh=maxR*2,bw=12;
+  const pg=ctx.createLinearGradient(bx,by,bx,by+bh);
+  pg.addColorStop(0,'rgba(240,72,72,.85)');pg.addColorStop(0.5,'rgba(240,160,40,.65)');pg.addColorStop(1,'rgba(74,138,240,.3)');
+  ctx.fillStyle=pg;ctx.fillRect(bx,by,bw,bh);
+  ctx.strokeStyle='rgba(255,255,255,.12)';ctx.lineWidth=.5;ctx.strokeRect(bx,by,bw,bh);
+  ctx.fillStyle='rgba(240,72,72,.7)';ctx.font='8px Space Mono';ctx.textAlign='left';
+  ctx.fillText('HIGH P',bx+bw+4,by+10);
+  ctx.fillStyle='rgba(74,138,240,.7)';
+  ctx.fillText('LOW P',bx+bw+4,by+bh-2);
+  ctx.fillStyle='rgba(140,160,190,.45)';ctx.font='8px Syne,sans-serif';ctx.textAlign='center';
+  ctx.save();ctx.translate(bx+bw+30,cy);ctx.rotate(-Math.PI/2);ctx.fillText('PRESSURE & TEMPERATURE INCREASE INWARD',0,0);ctx.restore();
+
+  // Leader lines & labels
+  const angleStep=(Math.PI*1.8)/(Math.max(n-1,1));
+  const startAngle=-Math.PI*0.9+Math.PI/2;
+  for(let i=0;i<n;i++){
+    const sh=shells[i];
+    const rO=outerEdge[i],rI=innerEdge[i];
+    const midR=(rO+rI)/2;
+    const angle=startAngle+i*angleStep;
+    const lx=cx+Math.cos(angle)*midR,ly=cy+Math.sin(angle)*midR;
+    const extR=maxR+55+i*6;
+    const ex=cx+Math.cos(angle)*extR,ey=cy+Math.sin(angle)*extR;
+    const clampedEx=Math.max(40,Math.min(W-80,ex));
+    const clampedEy=Math.max(20,Math.min(H-30,ey));
+    ctx.strokeStyle=sh.col+'99';ctx.lineWidth=0.8;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(clampedEx,clampedEy);ctx.stroke();
+    ctx.setLineDash([]);
+    const onRight=clampedEx>=cx;
+    ctx.textAlign=onRight?'left':'right';
+    const tx=onRight?clampedEx+4:clampedEx-4;
+    ctx.fillStyle=sh.col;ctx.font='bold 11px Syne,sans-serif';
+    ctx.fillText(sh.name,tx,clampedEy-12);
+    ctx.fillStyle='rgba(180,200,230,.75)';ctx.font='8px Space Mono';
+    ctx.fillText(sh.T,tx,clampedEy);
+    ctx.fillStyle='rgba(100,130,170,.65)';
+    ctx.fillText(sh.pct+'% | '+sh.P,tx,clampedEy+11);
+    const rxShort=sh.rx.split('(')[0].trim().slice(0,28);
+    ctx.fillStyle='rgba(80,110,150,.55)';ctx.font='7px Space Mono';
+    ctx.fillText(rxShort,tx,clampedEy+21);
+  }
+
+  // Animated fusion fronts
+  const pulse=0.5+0.5*Math.sin(Date.now()/300);
+  for(let i=1;i<n;i++){
+    const r=outerEdge[i];
+    const intensity=i/n;
+    ctx.strokeStyle=`rgba(255,255,200,${(0.08+pulse*0.18)*intensity})`;
+    ctx.lineWidth=3+intensity*3;
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+  }
+  if(n>0){
+    const coreR=innerEdge[n-1]||maxR*0.06;
+    ctx.strokeStyle=`rgba(255,200,100,${0.2+pulse*0.4})`;ctx.lineWidth=4;
+    ctx.beginPath();ctx.arc(cx,cy,Math.max(coreR,8),0,Math.PI*2);ctx.stroke();
+  }
+  if(tf>0&&tf<1.19) requestAnimationFrame(()=>{if(S.view==='onion'&&S.playing)draw();});
+
+  if(shells.some(s=>s.name==='Fe')){
+    ctx.fillStyle='rgba(240,72,72,.9)';ctx.font='bold 12px Syne,sans-serif';ctx.textAlign='center';
+    ctx.fillText('⚠ Iron core — endothermic: no net fusion energy — collapse imminent',cx,H-32);
+    ctx.fillStyle='rgba(240,72,72,.65)';ctx.font='10px Space Mono';
+    ctx.fillText('⁵⁶Fe is most tightly bound nucleus: ΔE < 0 per fusion event',cx,H-16);
+  }
+
+  ctx.fillStyle='rgba(160,180,210,.45)';ctx.font='11px Syne,sans-serif';ctx.textAlign='center';
+  ctx.fillText('Interior cross-section — not to scale | Fusion front glows at active burning boundary',cx,20);
+}
+
+// ── H-R DIAGRAM ───────────────────────────────────────────────────────────────
+function drawHR(W,H,star){
+  const pad={l:72,r:28,t:42,b:52};
+  const pw=W-pad.l-pad.r,ph=H-pad.t-pad.b;
+  const Tmin=2500,Tmax=55000,Lmin=1e-4,Lmax=3e7;
+  const tX=T=>pad.l+pw*(Math.log10(Tmax)-Math.log10(T))/(Math.log10(Tmax)-Math.log10(Tmin));
+  const lY=L=>pad.t+ph-ph*(Math.log10(Math.max(Lmin,L))-Math.log10(Lmin))/(Math.log10(Lmax)-Math.log10(Lmin));
+
+  ctx.fillStyle='rgba(9,13,26,.75)';ctx.strokeStyle='rgba(26,38,64,.8)';ctx.lineWidth=.5;
+  ctx.beginPath();ctx.rect(pad.l,pad.t,pw,ph);ctx.fill();ctx.stroke();
+
+  [1e-4,1e-2,1,100,1e4,1e6].forEach(L=>{
+    const y=lY(L);if(y<pad.t||y>pad.t+ph)return;
+    ctx.strokeStyle='rgba(26,38,64,.7)';ctx.lineWidth=.5;ctx.setLineDash([3,5]);
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+pw,y);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(100,130,170,.6)';ctx.font='9px Space Mono';ctx.textAlign='right';
+    const sups=['⁻⁴','⁻²','⁰','²','⁴','⁶'];
+    ctx.fillText('10'+(sups[Math.round(Math.log10(L))+4]||''),pad.l-5,y+3);
+  });
+  [40000,25000,10000,7000,5000,3500].forEach(T=>{
+    const x=tX(T);if(x<pad.l||x>pad.l+pw)return;
+    ctx.strokeStyle='rgba(26,38,64,.7)';ctx.lineWidth=.5;ctx.setLineDash([3,5]);
+    ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,pad.t+ph);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(100,130,170,.6)';ctx.font='9px Space Mono';ctx.textAlign='center';
+    ctx.fillText(T>=1000?(T/1000).toFixed(0)+'k':T,x,pad.t+ph+14);
+  });
+
+  [{cls:'O',T1:55000,T2:30000,c:'rgba(155,176,255,.07)'},{cls:'B',T1:30000,T2:10000,c:'rgba(200,215,255,.06)'},
+   {cls:'A',T1:10000,T2:7500,c:'rgba(240,245,255,.05)'},{cls:'F',T1:7500,T2:6000,c:'rgba(255,250,220,.05)'},
+   {cls:'G',T1:6000,T2:5200,c:'rgba(255,240,180,.05)'},{cls:'K',T1:5200,T2:3700,c:'rgba(255,200,120,.05)'},
+   {cls:'M',T1:3700,T2:2500,c:'rgba(255,150,80,.06)'}
+  ].forEach(b=>{
+    const x1=tX(b.T1),x2=tX(b.T2);
+    ctx.fillStyle=b.c;ctx.fillRect(x1,pad.t,x2-x1,ph);
+    ctx.fillStyle='rgba(150,160,185,.35)';ctx.font='9px Syne,sans-serif';ctx.textAlign='center';
+    ctx.fillText(b.cls,(x1+x2)/2,pad.t+11);
+  });
+
+  const rgs=[
+    {label:'Main Sequence',pts:[[48000,2e5],[12000,700],[7000,10],[5500,1],[4000,0.07],[2800,0.002]],col:'rgba(74,138,240,.3)',lx:tX(6800)-20,ly:lY(20)},
+    {label:'Giant Branch',  pts:[[5000,40],[4000,130],[3500,350],[3000,1100]],col:'rgba(255,124,48,.25)',lx:tX(3300)+8,ly:lY(250)},
+    {label:'Supergiant',    pts:[[35000,3.5e5],[15000,1.2e5],[8000,5e4],[4000,1e5],[3000,1.5e5]],col:'rgba(240,72,72,.15)',lx:tX(9000),ly:lY(6e4)},
+    {label:'WD Sequence',   pts:[[70000,0.0015],[25000,0.0004],[9000,0.00006]],col:'rgba(48,200,240,.2)',lx:tX(18000),ly:lY(0.0004)},
+  ];
+  rgs.forEach(r=>{
+    ctx.beginPath();r.pts.forEach((p,i)=>i===0?ctx.moveTo(tX(p[0]),lY(p[1])):ctx.lineTo(tX(p[0]),lY(p[1])));
+    ctx.strokeStyle=r.col;ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(180,195,220,.4)';ctx.font='9px Syne,sans-serif';ctx.textAlign='left';
+    ctx.fillText(r.label,r.lx,r.ly);
+  });
+
+  const is1x=tX(7700),is2x=tX(5800);
+  ctx.fillStyle='rgba(240,192,64,.04)';ctx.fillRect(is1x,pad.t,is2x-is1x,ph);
+  ctx.strokeStyle='rgba(240,192,64,.25)';ctx.lineWidth=1;ctx.setLineDash([2,4]);
+  ctx.beginPath();ctx.moveTo(is1x,pad.t);ctx.lineTo(is1x,pad.t+ph);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(is2x,pad.t);ctx.lineTo(is2x,pad.t+ph);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(240,192,64,.4)';ctx.font='8px Syne,sans-serif';ctx.textAlign='center';
+  ctx.fillText('Instability',(is1x+is2x)/2,pad.t+22);ctx.fillText('Strip',(is1x+is2x)/2,pad.t+32);
+
+  REAL_STARS.forEach(rs=>{
+    const rx2=tX(rs.T),ry2=lY(rs.L);
+    if(rx2<pad.l||rx2>pad.l+pw||ry2<pad.t||ry2>pad.t+ph)return;
+    const rc=planckHex(rs.T);
+    ctx.fillStyle=rc+'66';ctx.beginPath();ctx.arc(rx2,ry2,7,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=rc;ctx.beginPath();ctx.arc(rx2,ry2,3,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineWidth=.5;
+    ctx.beginPath();ctx.arc(rx2,ry2,3,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='rgba(200,215,235,.5)';ctx.font='8px Syne,sans-serif';
+    ctx.textAlign=rx2>pad.l+pw*0.7?'right':'left';
+    ctx.fillText(rs.name,rx2+(rx2>pad.l+pw*0.7?-6:6),ry2-5);
+  });
+
+  const phaseCol={
+    'Main Sequence':'#4a8af0','Blue Supergiant':'#aabfff',
+    'Red Giant':'#ff7c30','Red Supergiant':'#ff5500',
+    'Planetary Nebula':'#f0c040','LBV':'#f0d060',
+    'Wolf-Rayet':'#a060f0','Supernova':'#ffffff',
+    'White Dwarf':'#30c8f0','Neutron Star':'#30c8f0','Magnetar':'#cc44ff',
+    'Black Hole':'#888','Type Ia Supernova':'#ff4444',
+    'Brown Dwarf':'#c08050','Pair-Instability Supernova':'#ff2222',
+  };
+  if(S.trail.length>1){
+    const N=S.trail.length;
+    for(let i=1;i<N;i++){
+      const p=S.trail[i-1],q=S.trail[i];
+      const alpha=0.1+0.85*(i/N);
+      const pCol=phaseCol[q.phase]||q.col;
+      ctx.strokeStyle=pCol+(Math.round(alpha*200).toString(16).padStart(2,'0'));
+      ctx.lineWidth=i===N-1?2.5:1.2;
+      const px=tX(Math.max(Tmin,Math.min(Tmax,p.T))),py=lY(p.L);
+      const qx=tX(Math.max(Tmin,Math.min(Tmax,q.T))),qy=lY(q.L);
+      if(isFinite(px)&&isFinite(py)&&isFinite(qx)&&isFinite(qy)){
+        ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(qx,qy);ctx.stroke();
+      }
+    }
+    let prevPh='';
+    S.trail.forEach((pt,i)=>{
+      if(pt.phase!==prevPh&&i>0){
+        const tx=tX(Math.max(Tmin,Math.min(Tmax,pt.T))),ty=lY(pt.L);
+        if(isFinite(tx)&&isFinite(ty)&&tx>=pad.l&&tx<=pad.l+pw&&ty>=pad.t&&ty<=pad.t+ph){
+          ctx.fillStyle=(phaseCol[pt.phase]||'#fff')+'cc';
+          ctx.font='7px Syne,sans-serif';ctx.textAlign='center';
+          ctx.fillText(pt.phase,tx,ty-8);
+        }
+      }
+      prevPh=pt.phase;
+    });
+  }
+
+  const sx=tX(Math.max(Tmin,Math.min(Tmax,star.Teff)));
+  const sy=lY(Math.max(Lmin,Math.min(Lmax,star.Lr)));
+  const sc=planckHex(star.Teff);
+  if(isFinite(sx)&&isFinite(sy)){
+    ctx.fillStyle=sc+'44';ctx.beginPath();ctx.arc(sx,sy,12,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=sc;ctx.beginPath();ctx.arc(sx,sy,5,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(sx,sy,5,0,Math.PI*2);ctx.stroke();
+    const lx2=Math.min(sx+12,pad.l+pw-80),ly2=sy<pad.t+25?sy+20:sy-12;
+    ctx.fillStyle='rgba(220,235,255,.9)';ctx.font='bold 10px Syne,sans-serif';ctx.textAlign='left';
+    ctx.fillText(star.phase,lx2,ly2);
+    ctx.fillStyle='rgba(120,150,190,.65)';ctx.font='9px Space Mono';
+    ctx.fillText(`${Math.round(star.Teff/100)*100}K | ${fmtN(star.Lr)}L☉`,lx2,ly2+12);
+  }
+
+  ctx.fillStyle='rgba(120,150,190,.7)';ctx.font='10px Space Mono';ctx.textAlign='center';
+  ctx.fillText('← hotter    Surface Temperature (K)    cooler →',pad.l+pw/2,H-10);
+  ctx.save();ctx.translate(14,pad.t+ph/2);ctx.rotate(-Math.PI/2);ctx.fillText('Luminosity (L/L☉)',0,0);ctx.restore();
+  ctx.fillStyle='rgba(180,195,220,.55)';ctx.font='11px Syne,sans-serif';ctx.textAlign='center';
+  ctx.fillText('Hertzsprung-Russell Diagram',pad.l+pw/2,pad.t-16);
+  ctx.fillStyle='rgba(100,130,170,.5)';ctx.font='8px Space Mono';
+  ctx.fillText('Colored trail = evolutionary path | Phase-colored segments | Gray dots = real stars | Gold band = instability strip',pad.l+pw/2,pad.t-5);
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function fmtN(n){
+  if(n<0.001)return n.toExponential(1);
+  if(n>=1e9)return(n/1e9).toFixed(1)+'G';
+  if(n>=1e6)return(n/1e6).toFixed(1)+'M';
+  if(n>=1e3)return(n/1e3).toFixed(1)+'k';
+  if(n>=100)return n.toFixed(0);
+  if(n>=10)return n.toFixed(1);
+  return n.toFixed(2);
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+resize();
+onSlider();
+renderAch();
+renderDeathCollector();
+</script>
+</body>
+</html>
