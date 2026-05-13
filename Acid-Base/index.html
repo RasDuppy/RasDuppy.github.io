@@ -1,0 +1,2463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acid/Base Workshop</title>
+<style>
+  :root {
+    --bg: #0e1117;
+    --surface: #161b26;
+    --surface2: #1e2636;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --text: #e8edf5;
+    --muted: #7a8499;
+    --accent: #3ecf8e;
+    --accent2: #2ab87a;
+    --red: #ff6b6b;
+    --blue: #5b9cf6;
+    --amber: #f5a623;
+    --mono: 'Courier New', monospace;
+    --sans: 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1.25rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .header-icon {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, #3ecf8e22, #3ecf8e44);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .header h1 { font-size: 1.3rem; font-weight: 600; letter-spacing: -0.01em; }
+  .header p { font-size: 0.8rem; color: var(--muted); }
+
+  .tabs {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    overflow-x: auto;
+    padding: 0 1.5rem;
+  }
+  .tab {
+    padding: 0.85rem 1.1rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+    background: none; border-top: none; border-left: none; border-right: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .content { display: none; padding: 2rem; max-width: 900px; margin: 0 auto; }
+  .content.active { display: block; }
+
+  /* Shared components */
+  .section-title {
+    font-size: 1.1rem; font-weight: 600; margin-bottom: 0.35rem;
+  }
+  .section-sub {
+    font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .card-label {
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem;
+  }
+  .mono { font-family: var(--mono); }
+  .accent { color: var(--accent); }
+  .red { color: var(--red); }
+  .blue { color: var(--blue); }
+  .amber { color: var(--amber); }
+  .muted { color: var(--muted); }
+
+  /* Range slider */
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%; height: 6px;
+    background: var(--border2);
+    border-radius: 3px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #fff;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(62,207,142,0.4);
+  }
+
+  /* pH gradient strip */
+  .ph-strip {
+    height: 40px;
+    border-radius: 8px;
+    background: linear-gradient(to right,
+      #ff0000 0%, #ff4400 7%, #ff8800 14%,
+      #ffbb00 21%, #ffee00 28%,
+      #88ee00 35%, #00cc44 42%,
+      #00aaaa 50%, #0088cc 57%,
+      #0055ff 64%, #3300cc 71%,
+      #660099 78%, #880066 85%,
+      #aa0044 92%, #cc0022 100%);
+    position: relative;
+    margin: 1rem 0 0.5rem;
+  }
+  .ph-marker {
+    position: absolute;
+    top: -6px;
+    width: 4px; height: 52px;
+    background: white;
+    border-radius: 2px;
+    box-shadow: 0 0 6px rgba(255,255,255,0.8);
+    transform: translateX(-50%);
+    transition: left 0.1s;
+  }
+  .ph-labels {
+    display: flex; justify-content: space-between;
+    font-size: 0.7rem; color: var(--muted); font-family: var(--mono);
+    margin-top: 0.25rem;
+  }
+
+  /* Metric grid */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.75rem;
+    margin: 1.5rem 0;
+  }
+  .metric {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    text-align: center;
+  }
+  .metric-val {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+  .metric-name {
+    font-size: 0.72rem; color: var(--muted);
+  }
+
+  /* Zone badge */
+  .zone-badge {
+    display: inline-block;
+    padding: 0.25rem 0.9rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  .zone-acid { background: rgba(255,107,107,0.15); color: var(--red); border: 1px solid rgba(255,107,107,0.3); }
+  .zone-neutral { background: rgba(62,207,142,0.15); color: var(--accent); border: 1px solid rgba(62,207,142,0.3); }
+  .zone-base { background: rgba(91,156,246,0.15); color: var(--blue); border: 1px solid rgba(91,156,246,0.3); }
+
+  /* Litmus */
+  .litmus-container {
+    display: flex; gap: 1rem; margin-top: 1rem;
+  }
+  .litmus-paper {
+    flex: 1; border-radius: 8px; padding: 1rem;
+    text-align: center; font-size: 0.8rem; font-weight: 600;
+    border: 1px solid var(--border2);
+    transition: background 0.3s, color 0.3s;
+  }
+  .litmus-label { font-size: 0.7rem; margin-top: 0.25rem; opacity: 0.8; }
+
+  /* Two-column layout */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 600px) {
+    .metric-grid { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+  }
+
+  /* Theory cards */
+  .theory-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  @media (max-width: 650px) { .theory-grid { grid-template-columns: 1fr; } }
+  .theory-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .theory-card.selected { border-color: var(--accent); background: rgba(62,207,142,0.05); }
+  .theory-name { font-size: 1rem; font-weight: 600; margin-bottom: 0.35rem; }
+  .theory-year { font-size: 0.72rem; color: var(--muted); margin-bottom: 0.75rem; }
+  .theory-def {
+    font-size: 0.82rem; color: var(--muted); margin-bottom: 0.75rem; line-height: 1.5;
+  }
+  .theory-def strong { color: var(--text); font-weight: 600; }
+  .example-box {
+    background: var(--surface2);
+    border-radius: 8px; padding: 0.75rem;
+    font-family: var(--mono); font-size: 0.8rem;
+    border-left: 3px solid var(--accent);
+    margin-top: 0.5rem;
+  }
+  .chip {
+    display: inline-block; padding: 0.15rem 0.6rem;
+    border-radius: 4px; font-size: 0.72rem; font-weight: 600;
+    margin: 0.1rem;
+  }
+  .chip-red { background: rgba(255,107,107,0.15); color: var(--red); }
+  .chip-blue { background: rgba(91,156,246,0.15); color: var(--blue); }
+  .chip-green { background: rgba(62,207,142,0.15); color: var(--accent); }
+  .chip-amber { background: rgba(245,166,35,0.15); color: var(--amber); }
+
+  /* Equation display */
+  .equation {
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin: 0.75rem 0;
+    border: 1px solid var(--border);
+    letter-spacing: 0.02em;
+  }
+  .eq-arrow { color: var(--muted); margin: 0 0.5rem; }
+  .eq-acid { color: var(--red); font-weight: 600; }
+  .eq-base { color: var(--blue); font-weight: 600; }
+  .eq-conj-acid { color: #ff9f7a; font-weight: 600; }
+  .eq-conj-base { color: #7ab8ff; font-weight: 600; }
+
+  /* Bracket */
+  .bracket-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    margin: 0.75rem 0; font-size: 0.85rem;
+  }
+  .bracket-label { width: 90px; color: var(--muted); font-size: 0.78rem; }
+  .bracket-bar {
+    flex: 1; height: 8px; border-radius: 4px;
+    transition: width 0.2s;
+  }
+  .bracket-val { font-family: var(--mono); font-size: 0.8rem; min-width: 80px; text-align: right; }
+
+  /* Notation explainer */
+  .notation-display {
+    background: var(--surface2);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .big-sci { font-family: var(--mono); font-size: 2rem; font-weight: 600; }
+  .big-ph { font-family: var(--mono); font-size: 2.5rem; font-weight: 700; color: var(--accent); }
+  .arrow-down {
+    color: var(--muted); font-size: 1.5rem; margin: 0.75rem 0; display: block;
+  }
+  .notation-parts {
+    display: flex; justify-content: center; gap: 2rem;
+    margin-top: 1rem; flex-wrap: wrap;
+  }
+  .notation-part { text-align: center; }
+  .notation-part .big { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; }
+  .notation-part .desc { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; }
+  .highlight-exp { color: var(--red); }
+  .highlight-coeff { color: var(--blue); }
+  .highlight-ph-int { color: var(--red); }
+  .highlight-ph-dec { color: var(--blue); }
+
+  /* Step through */
+  .step-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1rem 0; }
+  @media (max-width: 600px) { .step-grid { grid-template-columns: 1fr; } }
+  .step-card {
+    background: var(--surface2); border-radius: 10px; padding: 1rem;
+    border: 1px solid var(--border); text-align: center; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .step-card:hover, .step-card.sel { border-color: var(--accent); background: rgba(62,207,142,0.05); }
+  .step-conc { font-family: var(--mono); font-size: 0.95rem; margin-bottom: 0.35rem; }
+  .step-ph { font-family: var(--mono); font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+  .step-label { font-size: 0.72rem; color: var(--muted); }
+
+  /* Buffer / titration */
+  .hh-display {
+    font-family: var(--mono); font-size: 1.1rem;
+    background: var(--surface2); border-radius: 8px;
+    padding: 1rem; text-align: center;
+    border: 1px solid var(--border); margin: 1rem 0;
+  }
+  .select-styled {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border2); border-radius: 8px;
+    padding: 0.5rem 0.75rem; font-size: 0.85rem; cursor: pointer;
+    outline: none;
+  }
+  .info-row { display: flex; justify-content: space-between; align-items: center; margin: 0.5rem 0; font-size: 0.85rem; }
+  .info-row span:first-child { color: var(--muted); }
+  .info-row span:last-child { font-family: var(--mono); }
+
+  /* Weak/strong table */
+  .acid-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+  .acid-table th {
+    background: var(--surface2); padding: 0.6rem 0.75rem;
+    text-align: left; font-size: 0.72rem; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .acid-table td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); }
+  .acid-table tr:last-child td { border-bottom: none; }
+  .acid-table td:nth-child(3) { font-family: var(--mono); font-size: 0.78rem; }
+
+  canvas { display: block; width: 100%; }
+  .btn {
+    background: rgba(62,207,142,0.1); color: var(--accent);
+    border: 1px solid rgba(62,207,142,0.3); border-radius: 8px;
+    padding: 0.5rem 1rem; font-size: 0.83rem; cursor: pointer;
+    font-family: var(--sans); transition: background 0.15s;
+  }
+  .btn:hover { background: rgba(62,207,142,0.2); }
+
+  .note-box {
+    background: rgba(245,166,35,0.08);
+    border: 1px solid rgba(245,166,35,0.25);
+    border-radius: 8px; padding: 0.75rem 1rem;
+    font-size: 0.82rem; color: #e8c97a;
+    margin: 1rem 0;
+  }
+  .note-box strong { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">⚗️</div>
+  <div>
+    <h1>Acid / Base Workshop</h1>
+    <p>Interactive reference for pH, pOH, theories, conjugate pairs, and equilibrium</p>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('ph-scale')">pH Scale</button>
+  <button class="tab" onclick="showTab('notation')">Sci. Notation → pH</button>
+  <button class="tab" onclick="showTab('theories')">Acid/Base Theories</button>
+  <button class="tab" onclick="showTab('conjugate')">Conjugate Pairs</button>
+  <button class="tab" onclick="showTab('strength')">Strong vs Weak</button>
+  <button class="tab" onclick="showTab('buffer')">Buffers &amp; Titration</button>
+  <button class="tab" onclick="showTab('ice')">ICE Tables</button>
+  <button class="tab" onclick="showTab('polyprotic')">Polyprotic Acids</button>
+  <button class="tab" onclick="showTab('salt')">Salt Hydrolysis</button>
+  <button class="tab" onclick="showTab('kw')">Kw &amp; Temperature</button>
+  <button class="tab" onclick="showTab('quiz')">⚡ Quiz</button>
+</div>
+
+<!-- ========== TAB 1: pH Scale ========== -->
+<div id="tab-ph-scale" class="content active">
+  <p class="section-title">Interactive pH Scale</p>
+  <p class="section-sub">Drag the slider to explore how all four values change across the pH spectrum.</p>
+
+  <div class="card">
+    <div class="card-label">Set pH</div>
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;">
+      <input type="range" id="ph-slider" min="0" max="14" step="0.1" value="7"
+        oninput="updatePH(this.value)" style="flex:1;">
+      <span class="mono accent" style="font-size:1.5rem; min-width:48px;" id="ph-display">7.0</span>
+      <span id="zone-badge" class="zone-badge zone-neutral">Neutral</span>
+    </div>
+    <div class="ph-strip" id="ph-strip">
+      <div class="ph-marker" id="ph-marker" style="left:50%"></div>
+    </div>
+    <div class="ph-labels">
+      <span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+      <span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+      <span>11</span><span>12</span><span>13</span><span>14</span>
+    </div>
+  </div>
+
+  <div class="metric-grid">
+    <div class="metric">
+      <div class="metric-val red" id="m-ph">7.00</div>
+      <div class="metric-name">pH</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val blue" id="m-poh">7.00</div>
+      <div class="metric-name">pOH</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val amber" id="m-h">1.00×10⁻⁷</div>
+      <div class="metric-name">[H⁺] mol/L</div>
+    </div>
+    <div class="metric">
+      <div class="metric-val accent" id="m-oh">1.00×10⁻⁷</div>
+      <div class="metric-name">[OH⁻] mol/L</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-label">Litmus Paper Test</div>
+      <div class="litmus-container">
+        <div class="litmus-paper" id="lit-red">
+          <div>Red Litmus</div>
+          <div class="litmus-label" id="lit-red-result">—</div>
+        </div>
+        <div class="litmus-paper" id="lit-blue">
+          <div>Blue Litmus</div>
+          <div class="litmus-label" id="lit-blue-result">—</div>
+        </div>
+      </div>
+      <p style="font-size:0.77rem; color:var(--muted); margin-top:0.75rem;">
+        Red litmus turns blue in bases (pH &gt; 7). Blue litmus turns red in acids (pH &lt; 7). Neither changes in neutral solutions.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Key Relationships</div>
+      <div class="info-row">
+        <span>pH + pOH</span><span class="accent">= 14 (at 25°C)</span>
+      </div>
+      <div class="info-row">
+        <span>pH = −log[H⁺]</span><span id="kw-ph" class="mono">−log(1×10⁻⁷)</span>
+      </div>
+      <div class="info-row">
+        <span>pOH = −log[OH⁻]</span><span id="kw-poh" class="mono">−log(1×10⁻⁷)</span>
+      </div>
+      <div class="info-row">
+        <span>Kw = [H⁺][OH⁻]</span><span class="mono accent">= 1×10⁻¹⁴</span>
+      </div>
+      <div class="info-row">
+        <span>[H⁺][OH⁻] =</span><span class="mono" id="kw-product">1.00×10⁻¹⁴</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Concentration Comparison</div>
+    <div id="bracket-rows"></div>
+  </div>
+</div>
+
+<!-- ========== TAB 2: Scientific Notation → pH ========== -->
+<div id="tab-notation" class="content">
+  <p class="section-title">From Scientific Notation to pH</p>
+  <p class="section-sub">The exponent becomes the integer part of pH. The coefficient shifts the decimal. This is the key insight students miss.</p>
+
+  <div class="note-box">
+    <strong>The Big Idea:</strong> pH = −log[H⁺] — the <span style="color:var(--red)">exponent</span> gives the digits before the decimal, and the <span style="color:var(--blue)">coefficient</span> determines the mantissa (digits after the decimal).
+  </div>
+
+  <p class="section-title" style="font-size:0.9rem; margin-bottom:0.75rem;">Click an example to see the breakdown</p>
+  <div class="step-grid" id="notation-examples"></div>
+
+  <div class="card" id="notation-detail" style="margin-top:1rem;">
+    <div class="card-label">Step-by-step breakdown</div>
+    <div id="notation-inner"></div>
+  </div>
+
+  <div class="card" style="margin-top:1rem;">
+    <div class="card-label">Build Your Own</div>
+    <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;">
+      <span class="mono" style="font-size:1.1rem;">[H⁺] =</span>
+      <select class="select-styled" id="coeff-sel" onchange="updateNotation()">
+        <option value="1">1.0</option><option value="2">2.0</option>
+        <option value="3">3.0</option><option value="4">4.0</option>
+        <option value="5">5.0</option><option value="6">6.0</option>
+        <option value="7">7.0</option><option value="8">8.0</option>
+        <option value="9">9.0</option>
+      </select>
+      <span class="mono muted">× 10</span>
+      <select class="select-styled" id="exp-sel" onchange="updateNotation()">
+        <option value="-1">⁻¹</option><option value="-2">⁻²</option>
+        <option value="-3">⁻³</option><option value="-4">⁻⁴</option>
+        <option value="-5">⁻⁵</option><option value="-6" selected>⁻⁶</option>
+        <option value="-7">⁻⁷</option><option value="-8">⁻⁸</option>
+        <option value="-9">⁻⁹</option><option value="-10">⁻¹⁰</option>
+        <option value="-11">⁻¹¹</option><option value="-12">⁻¹²</option>
+        <option value="-13">⁻¹³</option>
+      </select>
+    </div>
+    <div class="notation-display" id="custom-notation-display"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Significant Figures in pH</div>
+    <p style="font-size:0.84rem; color:var(--muted); margin-bottom:1rem;">
+      For a concentration given to <strong style="color:var(--text)">N significant figures</strong>, the pH is reported with <strong style="color:var(--accent)">N decimal places</strong> (the mantissa carries the sig figs; the integer part just reflects the order of magnitude).
+    </p>
+    <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:0.75rem; font-size:0.82rem;">
+      <div class="metric">
+        <div class="metric-val amber">1×10⁻³</div>
+        <div class="metric-name">1 sig fig → pH = 3</div>
+        <div class="metric-name" style="margin-top:0.25rem;">(.0 implied)</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val amber">1.5×10⁻³</div>
+        <div class="metric-name">2 sig figs → pH = 2.82</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val amber">1.50×10⁻³</div>
+        <div class="metric-name">3 sig figs → pH = 2.824</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== TAB 3: Theories ========== -->
+<div id="tab-theories" class="content">
+  <p class="section-title">Three Acid/Base Theories</p>
+  <p class="section-sub">Each theory expands the definition — Lewis is the most inclusive. Click a theory to see examples.</p>
+
+  <div class="theory-grid" id="theory-cards"></div>
+
+  <div class="card" id="theory-detail">
+    <div class="card-label">Examples & Comparison</div>
+    <div id="theory-detail-inner"></div>
+  </div>
+
+  <div class="card" style="margin-top:1rem;">
+    <div class="card-label">Expansion of definitions — which fits where?</div>
+    <div style="overflow-x:auto;">
+    <table class="acid-table">
+      <thead><tr>
+        <th>Theory</th><th>Acid is...</th><th>Base is...</th><th>Medium needed?</th><th>Covers Lewis?</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="chip chip-red">Arrhenius</span></td>
+          <td>produces H⁺ in water</td><td>produces OH⁻ in water</td>
+          <td class="red">Yes (aqueous)</td><td class="red">No</td>
+        </tr>
+        <tr>
+          <td><span class="chip chip-amber">Brønsted-Lowry</span></td>
+          <td>proton (H⁺) donor</td><td>proton (H⁺) acceptor</td>
+          <td class="amber">No</td><td class="red">No</td>
+        </tr>
+        <tr>
+          <td><span class="chip chip-green">Lewis</span></td>
+          <td>electron pair acceptor</td><td>electron pair donor</td>
+          <td class="accent">No</td><td class="accent">Yes — most general</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========== TAB 4: Conjugate Pairs ========== -->
+<div id="tab-conjugate" class="content">
+  <p class="section-title">Conjugate Acid-Base Pairs</p>
+  <p class="section-sub">In every Brønsted-Lowry acid-base reaction, each acid and its conjugate base differ by one H⁺.</p>
+
+  <div class="card">
+    <div class="card-label">Choose a reaction</div>
+    <select class="select-styled" id="rxn-sel" onchange="updateConjugate()" style="width:100%; margin-bottom:1rem;">
+      <option value="0">HCl + H₂O → H₃O⁺ + Cl⁻ (strong acid)</option>
+      <option value="1">CH₃COOH + H₂O ⇌ H₃O⁺ + CH₃COO⁻ (acetic acid)</option>
+      <option value="2">NH₃ + H₂O ⇌ NH₄⁺ + OH⁻ (ammonia base)</option>
+      <option value="3">H₂CO₃ + H₂O ⇌ H₃O⁺ + HCO₃⁻ (carbonic acid)</option>
+      <option value="4">HCO₃⁻ + H₂O ⇌ H₃O⁺ + CO₃²⁻ (amphiprotic)</option>
+      <option value="5">H₂O + H₂O ⇌ H₃O⁺ + OH⁻ (autoionization)</option>
+    </select>
+    <div id="rxn-display"></div>
+  </div>
+
+  <div class="two-col" id="pair-cards"></div>
+
+  <div class="card" style="margin-top:0rem;">
+    <div class="card-label">The H⁺ Transfer Rule</div>
+    <p style="font-size:0.84rem; color:var(--muted); line-height:1.6;">
+      Conjugate acid = base + H⁺ &nbsp;|&nbsp; Conjugate base = acid − H⁺
+      <br><br>
+      A <strong style="color:var(--text)">strong acid</strong> has a <strong style="color:var(--text)">weak conjugate base</strong> (and vice versa).
+      Amphoteric species (like HCO₃⁻ and H₂O) can act as either — they appear in both columns depending on the reaction partner.
+    </p>
+    <div style="display:flex; gap:1rem; margin-top:1rem; flex-wrap:wrap;">
+      <div style="flex:1; min-width:200px; background:var(--surface2); border-radius:8px; padding:1rem;">
+        <div style="font-size:0.72rem; color:var(--muted); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:0.06em;">Strong acid → weak conjugate base</div>
+        <div class="mono" style="font-size:0.85rem;">HCl → Cl⁻ (nearly inert)</div>
+        <div class="mono" style="font-size:0.85rem;">H₂SO₄ → HSO₄⁻</div>
+        <div class="mono" style="font-size:0.85rem;">HNO₃ → NO₃⁻</div>
+      </div>
+      <div style="flex:1; min-width:200px; background:var(--surface2); border-radius:8px; padding:1rem;">
+        <div style="font-size:0.72rem; color:var(--muted); margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:0.06em;">Weak acid → stronger conjugate base</div>
+        <div class="mono" style="font-size:0.85rem;">CH₃COOH → CH₃COO⁻</div>
+        <div class="mono" style="font-size:0.85rem;">H₂CO₃ → HCO₃⁻</div>
+        <div class="mono" style="font-size:0.85rem;">NH₄⁺ → NH₃</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:0;">
+    <div class="card-label">pKa + pKb Calculator — Conjugate Pair Relationship</div>
+    <p style="font-size:0.84rem; color:var(--muted); margin-bottom:1rem;">
+      For any conjugate acid-base pair: <strong style="color:var(--accent)">Ka × Kb = Kw = 1×10⁻¹⁴</strong> &nbsp;→&nbsp; <strong style="color:var(--accent)">pKa + pKb = 14</strong>
+    </p>
+    <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem;">
+      <div style="flex:1; min-width:180px;">
+        <div class="card-label" style="margin-bottom:0.35rem;">Enter Ka or pKa</div>
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <input type="number" id="cpair-ka" placeholder="e.g. 1.8e-5" step="any"
+            oninput="calcConjPair('ka')"
+            style="flex:1; background:var(--surface2); color:var(--text); border:1px solid var(--border2);
+              border-radius:8px; padding:0.5rem 0.75rem; font-size:0.85rem; font-family:var(--mono); outline:none;">
+          <span style="color:var(--muted); font-size:0.8rem;">or pKa:</span>
+          <input type="number" id="cpair-pka" placeholder="e.g. 4.74" step="any"
+            oninput="calcConjPair('pka')"
+            style="width:80px; background:var(--surface2); color:var(--text); border:1px solid var(--border2);
+              border-radius:8px; padding:0.5rem 0.75rem; font-size:0.85rem; font-family:var(--mono); outline:none;">
+        </div>
+      </div>
+    </div>
+    <div id="cpair-result" style="display:none;">
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:0.75rem; margin-top:0.5rem;">
+        <div class="metric"><div class="metric-val red" id="cp-ka">—</div><div class="metric-name">Ka (acid)</div></div>
+        <div class="metric"><div class="metric-val red" id="cp-pka">—</div><div class="metric-name">pKa</div></div>
+        <div class="metric"><div class="metric-val blue" id="cp-kb">—</div><div class="metric-name">Kb (conj. base)</div></div>
+        <div class="metric"><div class="metric-val blue" id="cp-pkb">—</div><div class="metric-name">pKb</div></div>
+      </div>
+      <div class="note-box" style="margin-top:0.75rem;" id="cp-note"></div>
+    </div>
+  </div>
+</div>
+<div id="tab-strength" class="content">
+  <p class="section-title">Strong vs Weak Acids & Bases</p>
+  <p class="section-sub">Strength refers to <em>degree of dissociation</em> — not concentration. Strong acids/bases fully dissociate; weak ones reach equilibrium.</p>
+
+  <div class="two-col" style="margin-bottom:1rem;">
+    <div class="card">
+      <div class="card-label">Dissociation Model</div>
+      <select class="select-styled" id="dis-sel" onchange="updateDissociation()" style="width:100%; margin-bottom:1rem;">
+        <option value="strong-acid">Strong acid (HCl)</option>
+        <option value="weak-acid" selected>Weak acid (CH₃COOH)</option>
+        <option value="strong-base">Strong base (NaOH)</option>
+        <option value="weak-base">Weak base (NH₃)</option>
+      </select>
+      <canvas id="dis-canvas" height="180"></canvas>
+      <div style="display:flex; gap:1rem; margin-top:0.75rem; font-size:0.75rem; flex-wrap:wrap;" id="dis-legend"></div>
+      <div id="dis-info" style="margin-top:0.5rem; font-size:0.82rem; color:var(--muted); line-height:1.5;"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Ka / Kb Calculator</div>
+      <p style="font-size:0.8rem; color:var(--muted); margin-bottom:0.75rem;">
+        For a weak acid HA ⇌ H⁺ + A⁻ with initial concentration C and percent dissociation α:
+      </p>
+      <div class="info-row">
+        <span>Concentration (C)</span>
+        <input type="range" id="ka-c" min="1" max="100" value="10" step="1" onchange="updateKa()" style="width:120px;">
+        <span class="mono" id="ka-c-val">0.10 M</span>
+      </div>
+      <div class="info-row">
+        <span>% Dissociation (α)</span>
+        <input type="range" id="ka-a" min="1" max="50" value="5" step="1" onchange="updateKa()" style="width:120px;">
+        <span class="mono" id="ka-a-val">5%</span>
+      </div>
+      <div class="hh-display" id="ka-display"></div>
+      <div class="info-row">
+        <span>[H⁺]</span><span class="mono red" id="ka-h">—</span>
+      </div>
+      <div class="info-row">
+        <span>pH</span><span class="mono accent" id="ka-ph">—</span>
+      </div>
+      <div class="note-box" style="margin-top:0.75rem; font-size:0.77rem;">
+        <strong>5% rule:</strong> if α &lt; 5%, the approximation Ka ≈ Cα² is valid without the quadratic formula.
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-label">Common Strong Acids (memorize these)</div>
+      <table class="acid-table">
+        <thead><tr><th>Formula</th><th>Name</th><th>Ka</th></tr></thead>
+        <tbody>
+          <tr><td class="mono red">HCl</td><td>Hydrochloric acid</td><td class="mono">≫1</td></tr>
+          <tr><td class="mono red">HBr</td><td>Hydrobromic acid</td><td class="mono">≫1</td></tr>
+          <tr><td class="mono red">HI</td><td>Hydroiodic acid</td><td class="mono">≫1</td></tr>
+          <tr><td class="mono red">HNO₃</td><td>Nitric acid</td><td class="mono">≫1</td></tr>
+          <tr><td class="mono red">HClO₄</td><td>Perchloric acid</td><td class="mono">≫1</td></tr>
+          <tr><td class="mono red">H₂SO₄</td><td>Sulfuric acid (1st)</td><td class="mono">≫1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-label">Common Weak Acids (Ka values)</div>
+      <table class="acid-table">
+        <thead><tr><th>Formula</th><th>Name</th><th>Ka</th></tr></thead>
+        <tbody>
+          <tr><td class="mono amber">CH₃COOH</td><td>Acetic acid</td><td class="mono">1.8×10⁻⁵</td></tr>
+          <tr><td class="mono amber">HF</td><td>Hydrofluoric acid</td><td class="mono">6.8×10⁻⁴</td></tr>
+          <tr><td class="mono amber">H₂CO₃</td><td>Carbonic acid</td><td class="mono">4.3×10⁻⁷</td></tr>
+          <tr><td class="mono amber">H₃PO₄</td><td>Phosphoric acid</td><td class="mono">7.5×10⁻³</td></tr>
+          <tr><td class="mono amber">HCN</td><td>Hydrocyanic acid</td><td class="mono">6.2×10⁻¹⁰</td></tr>
+          <tr><td class="mono amber">NH₄⁺</td><td>Ammonium ion</td><td class="mono">5.6×10⁻¹⁰</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="two-col" style="margin-top:1rem;">
+    <div class="card">
+      <div class="card-label">Common Strong Bases</div>
+      <table class="acid-table">
+        <thead><tr><th>Formula</th><th>Name</th></tr></thead>
+        <tbody>
+          <tr><td class="mono blue">NaOH</td><td>Sodium hydroxide</td></tr>
+          <tr><td class="mono blue">KOH</td><td>Potassium hydroxide</td></tr>
+          <tr><td class="mono blue">Ca(OH)₂</td><td>Calcium hydroxide</td></tr>
+          <tr><td class="mono blue">Ba(OH)₂</td><td>Barium hydroxide</td></tr>
+          <tr><td class="mono blue">LiOH</td><td>Lithium hydroxide</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-label">Common Weak Bases (Kb values)</div>
+      <table class="acid-table">
+        <thead><tr><th>Formula</th><th>Name</th><th>Kb</th></tr></thead>
+        <tbody>
+          <tr><td class="mono" style="color:#a0c4ff;">NH₃</td><td>Ammonia</td><td class="mono">1.8×10⁻⁵</td></tr>
+          <tr><td class="mono" style="color:#a0c4ff;">CH₃NH₂</td><td>Methylamine</td><td class="mono">4.4×10⁻⁴</td></tr>
+          <tr><td class="mono" style="color:#a0c4ff;">C₅H₅N</td><td>Pyridine</td><td class="mono">1.7×10⁻⁹</td></tr>
+          <tr><td class="mono" style="color:#a0c4ff;">C₆H₅NH₂</td><td>Aniline</td><td class="mono">4.3×10⁻¹⁰</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========== TAB 6: Buffer & Titration ========== -->
+<div id="tab-buffer" class="content">
+  <p class="section-title">Buffers & Titration</p>
+  <p class="section-sub">Buffers resist pH change. Titration curves reveal equivalence points and pKa values.</p>
+
+  <div class="two-col" style="margin-bottom:1rem;">
+    <div class="card">
+      <div class="card-label">Henderson-Hasselbalch Equation</div>
+      <div class="hh-display" style="font-size:1.3rem; letter-spacing:0.03em;">
+        pH = pKₐ + log([A⁻]/[HA])
+      </div>
+      <div class="info-row" style="margin-top:1rem;">
+        <span>Weak acid</span>
+        <select class="select-styled" id="buf-acid" onchange="updateBuffer()">
+          <option value="4.74">Acetic acid (pKa = 4.74)</option>
+          <option value="3.75">Formic acid (pKa = 3.75)</option>
+          <option value="6.35">Carbonic acid (pKa = 6.35)</option>
+          <option value="7.20">H₂PO₄⁻ (pKa = 7.20)</option>
+          <option value="9.25">Ammonium (pKa = 9.25)</option>
+          <option value="10.33">HCO₃⁻ (pKa = 10.33)</option>
+        </select>
+      </div>
+      <div class="info-row" style="margin-top:0.75rem;">
+        <span>[A⁻] / [HA] ratio</span>
+        <input type="range" id="buf-ratio" min="-20" max="20" value="0" onchange="updateBuffer()" style="width:130px;">
+        <span class="mono" id="buf-ratio-val">1:1</span>
+      </div>
+      <div class="hh-display" id="hh-result" style="margin-top:1rem; font-size:1.4rem; color:var(--accent);"></div>
+      <p style="font-size:0.78rem; color:var(--muted); margin-top:0.75rem;">
+        At ratio = 1:1, pH = pKa. Effective buffer range: pKa ± 1. Outside this range, buffering capacity drops sharply.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Titration Curve</div>
+      <select class="select-styled" id="tit-type" onchange="drawTitration()" style="width:100%; margin-bottom:1rem;">
+        <option value="sa-sb">Strong acid + Strong base</option>
+        <option value="wa-sb" selected>Weak acid + Strong base</option>
+        <option value="sb-sa">Strong base + Strong acid</option>
+        <option value="wb-sa">Weak base + Strong acid</option>
+      </select>
+      <canvas id="tit-canvas" height="220"></canvas>
+      <div id="tit-legend" style="font-size:0.75rem; color:var(--muted); margin-top:0.5rem; line-height:1.8;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Buffer Capacity & pH Range — Key Concepts</div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:0.75rem; margin-top:0.5rem;">
+      <div class="metric">
+        <div class="metric-val accent">pKa ± 1</div>
+        <div class="metric-name">Effective buffer range</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val blue">1:1 ratio</div>
+        <div class="metric-name">Maximum buffer capacity (pH = pKa)</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val amber">Equiv. point</div>
+        <div class="metric-name">Moles acid = moles base added</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val red">½ equiv.</div>
+        <div class="metric-name">pH = pKa (weak acid titrations)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:0;">
+    <div class="card-label">Indicators — selecting by equivalence point pH</div>
+    <table class="acid-table">
+      <thead><tr><th>Indicator</th><th>pH range</th><th>Color change</th><th>Best for</th></tr></thead>
+      <tbody>
+        <tr><td>Methyl orange</td><td class="mono">3.1 – 4.4</td><td><span class="chip chip-red">Red</span>→<span class="chip chip-amber">Orange</span></td><td>Strong acid + strong base</td></tr>
+        <tr><td>Methyl red</td><td class="mono">4.4 – 6.2</td><td><span class="chip chip-red">Red</span>→<span class="chip chip-amber">Yellow</span></td><td>Weak base titrations</td></tr>
+        <tr><td>Bromothymol blue</td><td class="mono">6.0 – 7.6</td><td><span class="chip chip-amber">Yellow</span>→<span class="chip chip-blue">Blue</span></td><td>Near-neutral equiv. points</td></tr>
+        <tr><td>Phenolphthalein</td><td class="mono">8.2 – 10.0</td><td>Colorless→<span class="chip chip-red" style="background:rgba(200,100,200,0.15); color:#d880d8;">Pink</span></td><td>Weak acid + strong base ✓</td></tr>
+        <tr><td>Alizarin yellow</td><td class="mono">10.1 – 12.0</td><td><span class="chip chip-amber">Yellow</span>→<span class="chip chip-red">Red</span></td><td>Very alkaline equiv. points</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ========== TAB: POLYPROTIC ACIDS ========== -->
+<div id="tab-polyprotic" class="content">
+  <p class="section-title">Polyprotic Acids</p>
+  <p class="section-sub">Polyprotic acids donate more than one H⁺. Each step has its own Ka, and Ka₁ ≫ Ka₂ ≫ Ka₃. The first dissociation dominates pH.</p>
+
+  <div class="card">
+    <div class="card-label">Select a polyprotic acid</div>
+    <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem;">
+      <select class="select-styled" id="poly-sel" onchange="updatePolyprotic()" style="flex:1; min-width:220px;">
+        <option value="h2co3">Carbonic acid (H₂CO₃) — diprotic</option>
+        <option value="h2so4">Sulfuric acid (H₂SO₄) — diprotic (Ka₁ strong)</option>
+        <option value="h3po4">Phosphoric acid (H₃PO₄) — triprotic</option>
+        <option value="h2s">Hydrogen sulfide (H₂S) — diprotic</option>
+        <option value="oxalic">Oxalic acid (H₂C₂O₄) — diprotic</option>
+      </select>
+      <span style="font-size:0.85rem; color:var(--muted);">Concentration:</span>
+      <input type="range" id="poly-conc" min="1" max="200" value="100" step="1" onchange="updatePolyprotic()" style="width:120px; flex:none;">
+      <span class="mono accent" id="poly-conc-val">0.100 M</span>
+    </div>
+
+    <div id="poly-steps"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-label">pH Calculation Summary</div>
+      <div class="info-row"><span>Dominant species at eq.</span><span class="mono accent" id="poly-dominant">—</span></div>
+      <div class="info-row"><span>[H⁺] from step 1</span><span class="mono red" id="poly-h1">—</span></div>
+      <div class="info-row"><span>[H⁺] from step 2</span><span class="mono" id="poly-h2">—</span></div>
+      <div class="info-row"><span>Total [H⁺] ≈</span><span class="mono red" id="poly-htot">—</span></div>
+      <div class="info-row"><span>pH</span><span class="mono accent" id="poly-ph">—</span></div>
+      <div class="note-box" id="poly-note" style="margin-top:0.75rem;"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Species Distribution at Equilibrium</div>
+      <div id="poly-species"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Reference — Ka Values for Common Polyprotic Acids</div>
+    <div style="overflow-x:auto;">
+    <table class="acid-table">
+      <thead><tr><th>Acid</th><th>Ka₁</th><th>Ka₂</th><th>Ka₃</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>H₂CO₃</td><td class="mono">4.3×10⁻⁷</td><td class="mono">4.7×10⁻¹¹</td><td class="mono">—</td><td>Blood buffer system</td></tr>
+        <tr><td>H₂SO₄</td><td class="mono red">≫1 (strong)</td><td class="mono">1.2×10⁻²</td><td class="mono">—</td><td>Ka₁ fully dissociates</td></tr>
+        <tr><td>H₃PO₄</td><td class="mono">7.5×10⁻³</td><td class="mono">6.2×10⁻⁸</td><td class="mono">4.8×10⁻¹³</td><td>Biological phosphate buffer</td></tr>
+        <tr><td>H₂S</td><td class="mono">1.0×10⁻⁷</td><td class="mono">1.0×10⁻¹⁹</td><td class="mono">—</td><td>Ka₂ negligible</td></tr>
+        <tr><td>H₂C₂O₄</td><td class="mono">5.9×10⁻²</td><td class="mono">6.4×10⁻⁵</td><td class="mono">—</td><td>Oxalic acid (kidney stones)</td></tr>
+        <tr><td>H₃Cit</td><td class="mono">7.4×10⁻⁴</td><td class="mono">1.7×10⁻⁵</td><td class="mono">4.0×10⁻⁷</td><td>Citric acid</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========== TAB: SALT HYDROLYSIS ========== -->
+<div id="tab-salt" class="content">
+  <p class="section-title">Salt Hydrolysis</p>
+  <p class="section-sub">When a salt dissolves, its ions may react with water to change the pH. The result depends entirely on which acid and base formed the salt.</p>
+
+  <div class="card">
+    <div class="card-label">Decision Framework — will the salt solution be acidic, basic, or neutral?</div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:0.75rem; margin:1rem 0;">
+      <div style="background:var(--surface2); border-radius:10px; padding:1rem; border-left:3px solid var(--accent);">
+        <div style="font-size:0.78rem; font-weight:600; color:var(--accent); margin-bottom:0.5rem;">NEUTRAL — pH ≈ 7</div>
+        <div style="font-size:0.82rem; color:var(--muted);">Strong acid + Strong base<br><span class="mono">NaCl, KNO₃, KBr</span></div>
+      </div>
+      <div style="background:var(--surface2); border-radius:10px; padding:1rem; border-left:3px solid var(--red);">
+        <div style="font-size:0.78rem; font-weight:600; color:var(--red); margin-bottom:0.5rem;">ACIDIC — pH &lt; 7</div>
+        <div style="font-size:0.82rem; color:var(--muted);">Strong acid + Weak base<br><span class="mono">NH₄Cl, NH₄NO₃</span></div>
+      </div>
+      <div style="background:var(--surface2); border-radius:10px; padding:1rem; border-left:3px solid var(--blue);">
+        <div style="font-size:0.78rem; font-weight:600; color:var(--blue); margin-bottom:0.5rem;">BASIC — pH &gt; 7</div>
+        <div style="font-size:0.82rem; color:var(--muted);">Weak acid + Strong base<br><span class="mono">NaCH₃COO, NaCN</span></div>
+      </div>
+      <div style="background:var(--surface2); border-radius:10px; padding:1rem; border-left:3px solid var(--amber);">
+        <div style="font-size:0.78rem; font-weight:600; color:var(--amber); margin-bottom:0.5rem;">DEPENDS — compare Ka vs Kb</div>
+        <div style="font-size:0.82rem; color:var(--muted);">Weak acid + Weak base<br><span class="mono">NH₄CH₃COO</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Interactive Salt Calculator</div>
+    <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem;">
+      <select class="select-styled" id="salt-sel" onchange="updateSalt()" style="flex:1; min-width:240px;">
+        <option value="nacl">NaCl — NaOH (strong) + HCl (strong)</option>
+        <option value="nh4cl">NH₄Cl — NH₃ (weak base) + HCl (strong)</option>
+        <option value="nach3coo">NaCH₃COO — NaOH (strong) + CH₃COOH (weak)</option>
+        <option value="nacn">NaCN — NaOH (strong) + HCN (weak)</option>
+        <option value="nh4ch3coo">NH₄CH₃COO — NH₃ (weak) + CH₃COOH (weak)</option>
+        <option value="na2co3">Na₂CO₃ — NaOH (strong) + H₂CO₃ (weak)</option>
+        <option value="nahco3">NaHCO₃ — NaOH (strong) + H₂CO₃ (weak, 2nd step)</option>
+        <option value="nh4f">NH₄F — NH₃ (weak) + HF (weak)</option>
+      </select>
+      <span style="font-size:0.85rem; color:var(--muted);">Concentration:</span>
+      <input type="range" id="salt-conc" min="1" max="200" value="100" step="1" onchange="updateSalt()" style="width:120px; flex:none;">
+      <span class="mono accent" id="salt-conc-val">0.100 M</span>
+    </div>
+
+    <div id="salt-analysis"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Hydrolysis Reactions — what actually happens in solution</div>
+    <div id="salt-rxn"></div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-label">Results</div>
+      <div class="info-row"><span>Salt type</span><span id="salt-type-badge">—</span></div>
+      <div class="info-row"><span>Hydrolysis constant (Kh)</span><span class="mono" id="salt-kh">—</span></div>
+      <div class="info-row"><span>[H⁺] at equilibrium</span><span class="mono red" id="salt-h">—</span></div>
+      <div class="info-row"><span>pH</span><span class="mono accent" id="salt-ph">—</span></div>
+      <div class="info-row"><span>pOH</span><span class="mono blue" id="salt-poh">—</span></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Step-by-step explanation</div>
+      <div id="salt-steps" style="font-size:0.82rem; color:var(--muted); line-height:1.8;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== TAB: Kw & TEMPERATURE ========== -->
+<div id="tab-kw" class="content">
+  <p class="section-title">Kw and Temperature</p>
+  <p class="section-sub">Water's ion product Kw increases with temperature. At 37°C, pure water has pH &lt; 7 — but it is still neutral, because [H⁺] = [OH⁻].</p>
+
+  <div class="note-box">
+    <strong>The key insight students miss:</strong> "Neutral" means [H⁺] = [OH⁻], not pH = 7. pH = 7 is neutral only at 25°C. At body temperature (37°C), neutral pH is about 6.81.
+  </div>
+
+  <div class="card" style="margin-top:1rem;">
+    <div class="card-label">Drag temperature to see how Kw and neutral pH shift</div>
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;">
+      <input type="range" id="kw-temp" min="0" max="100" step="1" value="25" oninput="updateKwTemp()" style="flex:1;">
+      <span class="mono accent" style="font-size:1.4rem; min-width:60px;" id="kw-temp-val">25°C</span>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:0.75rem; margin-top:1rem;">
+      <div class="metric"><div class="metric-val amber" id="kw-val">1.01×10⁻¹⁴</div><div class="metric-name">Kw at this temp</div></div>
+      <div class="metric"><div class="metric-val accent" id="kw-neutral-ph">7.00</div><div class="metric-name">Neutral pH (where [H⁺]=[OH⁻])</div></div>
+      <div class="metric"><div class="metric-val red" id="kw-pkw">13.996</div><div class="metric-name">pKw = −log(Kw)</div></div>
+      <div class="metric"><div class="metric-val blue" id="kw-status">Neutral</div><div class="metric-name">Pure water is still...</div></div>
+    </div>
+  </div>
+
+  <div class="two-col" style="margin-top:1rem;">
+    <div class="card">
+      <div class="card-label">Kw vs Temperature — reference table</div>
+      <table class="acid-table">
+        <thead><tr><th>Temp (°C)</th><th>Kw</th><th>Neutral pH</th><th>Context</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td class="mono">1.14×10⁻¹⁵</td><td class="mono accent">7.47</td><td>Ice water</td></tr>
+          <tr><td>10</td><td class="mono">2.93×10⁻¹⁵</td><td class="mono accent">7.27</td><td>Cold lab temp</td></tr>
+          <tr><td>25</td><td class="mono">1.01×10⁻¹⁴</td><td class="mono accent">7.00</td><td>Standard (STP)</td></tr>
+          <tr><td>37</td><td class="mono">2.42×10⁻¹⁴</td><td class="mono accent">6.81</td><td>Human body temp</td></tr>
+          <tr><td>50</td><td class="mono">5.48×10⁻¹⁴</td><td class="mono accent">6.63</td><td>Warm water</td></tr>
+          <tr><td>60</td><td class="mono">9.55×10⁻¹⁴</td><td class="mono accent">6.51</td><td>Hot water</td></tr>
+          <tr><td>100</td><td class="mono">5.13×10⁻¹³</td><td class="mono accent">6.14</td><td>Boiling point</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-label">Why does Kw increase with temperature?</div>
+      <p style="font-size:0.84rem; color:var(--muted); line-height:1.7; margin-bottom:1rem;">
+        The autoionization of water is <strong style="color:var(--text)">endothermic</strong>:
+      </p>
+      <div class="equation">H₂O(l) ⇌ H⁺(aq) + OH⁻(aq) &nbsp;&nbsp; ΔH &gt; 0</div>
+      <p style="font-size:0.84rem; color:var(--muted); line-height:1.7; margin-top:1rem;">
+        By Le Chatelier's principle, adding heat shifts equilibrium <strong style="color:var(--text)">right</strong> → more H⁺ and OH⁻ → larger Kw. Since [H⁺] = [OH⁻] still holds, the solution remains neutral — just with a lower pH value.
+      </p>
+      <div class="note-box" style="margin-top:1rem;">
+        <strong>AP/IB exam tip:</strong> If asked "is pure water at 37°C acidic?", the answer is NO — it is neutral. The equal concentrations of H⁺ and OH⁻ define neutrality, not pH = 7.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">The relationship — why pH decreases as temp rises</div>
+    <canvas id="kw-canvas" height="180"></canvas>
+  </div>
+</div>
+
+<!-- ========== TAB 7: ICE TABLE ========== -->
+<div id="tab-ice" class="content">
+  <p class="section-title">ICE Table — Interactive Equilibrium</p>
+  <p class="section-sub">ICE = Initial / Change / Equilibrium. The core tool for solving weak acid and weak base problems.</p>
+
+  <div class="card">
+    <div class="card-label">Choose a weak acid or base</div>
+    <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem;">
+      <select class="select-styled" id="ice-sel" onchange="updateICE()" style="flex:1; min-width:220px;">
+        <option value="acetic">Acetic acid (CH₃COOH) — Ka = 1.8×10⁻⁵</option>
+        <option value="hf">Hydrofluoric acid (HF) — Ka = 6.8×10⁻⁴</option>
+        <option value="hcn">Hydrocyanic acid (HCN) — Ka = 6.2×10⁻¹⁰</option>
+        <option value="hno2">Nitrous acid (HNO₂) — Ka = 4.5×10⁻⁴</option>
+        <option value="nh3">Ammonia (NH₃) — Kb = 1.8×10⁻⁵</option>
+        <option value="pyridine">Pyridine (C₅H₅N) — Kb = 1.7×10⁻⁹</option>
+      </select>
+      <span style="font-size:0.85rem; color:var(--muted);">Initial concentration:</span>
+      <input type="range" id="ice-conc" min="1" max="200" value="100" step="1" onchange="updateICE()" style="width:130px; flex:none;">
+      <span class="mono accent" id="ice-conc-val">0.100 M</span>
+    </div>
+
+    <div id="ice-reaction" class="equation" style="margin-bottom:1.25rem;"></div>
+
+    <div style="overflow-x:auto;">
+    <table class="acid-table" id="ice-table" style="text-align:center;">
+      <thead>
+        <tr>
+          <th style="text-align:left; width:80px;">Step</th>
+          <th id="ice-th-acid" style="min-width:130px;"></th>
+          <th style="min-width:80px;">⇌ H⁺</th>
+          <th id="ice-th-conj" style="min-width:130px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align:left; font-weight:600; color:var(--amber);">I — Initial</td>
+          <td id="ice-i-acid" class="mono"></td>
+          <td class="mono muted">~0</td>
+          <td id="ice-i-conj" class="mono muted">~0</td>
+        </tr>
+        <tr>
+          <td style="text-align:left; font-weight:600; color:var(--red);">C — Change</td>
+          <td id="ice-c-acid" class="mono red"></td>
+          <td id="ice-c-h" class="mono accent"></td>
+          <td id="ice-c-conj" class="mono accent"></td>
+        </tr>
+        <tr style="background:var(--surface2);">
+          <td style="text-align:left; font-weight:600; color:var(--accent);">E — Equilibrium</td>
+          <td id="ice-e-acid" class="mono"></td>
+          <td id="ice-e-h" class="mono accent"></td>
+          <td id="ice-e-conj" class="mono accent"></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="card">
+      <div class="card-label">Ka / Kb Expression</div>
+      <div class="hh-display" id="ice-ka-expr" style="font-size:0.95rem; line-height:2;"></div>
+      <div class="info-row" style="margin-top:0.75rem;">
+        <span>Exact (quadratic)</span><span class="mono accent" id="ice-ka-exact">—</span>
+      </div>
+      <div class="info-row">
+        <span>5% approx. valid?</span><span id="ice-5pct">—</span>
+      </div>
+      <div class="info-row">
+        <span>% dissociation</span><span class="mono" id="ice-pct-dis">—</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Results</div>
+      <div class="info-row">
+        <span>[H⁺] or [OH⁻] at eq.</span><span class="mono red" id="ice-res-h">—</span>
+      </div>
+      <div class="info-row">
+        <span id="ice-res-ph-label">pH</span><span class="mono accent" id="ice-res-ph">—</span>
+      </div>
+      <div class="info-row">
+        <span id="ice-res-poh-label">pOH</span><span class="mono blue" id="ice-res-poh">—</span>
+      </div>
+      <div class="info-row">
+        <span>Solution type</span><span id="ice-res-type">—</span>
+      </div>
+      <div class="note-box" style="margin-top:0.75rem;" id="ice-note"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Step-by-step solution</div>
+    <div id="ice-steps" style="font-size:0.84rem; line-height:1.9; color:var(--muted);"></div>
+  </div>
+</div>
+
+<!-- ========== TAB 8: QUIZ ========== -->
+<div id="tab-quiz" class="content">
+  <p class="section-title">Practice Quiz</p>
+  <p class="section-sub">Mixed questions covering all topics. Answers and explanations shown after each response.</p>
+
+  <div id="quiz-start-screen">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-bottom:1rem;">
+      <div class="card" style="cursor:pointer; border-color:var(--accent);" onclick="startQuiz('all')">
+        <div class="card-label" style="color:var(--accent);">Full Quiz</div>
+        <div style="font-size:1rem; font-weight:600; margin-bottom:0.35rem;">All Topics</div>
+        <div style="font-size:0.82rem; color:var(--muted);">20 questions • ~10 min<br>pH, theories, conjugates, Ka/Kb, buffers</div>
+      </div>
+      <div class="card" style="cursor:pointer;" onclick="startQuiz('ph')">
+        <div class="card-label">Quick Drill</div>
+        <div style="font-size:1rem; font-weight:600; margin-bottom:0.35rem;">pH &amp; Calculations</div>
+        <div style="font-size:0.82rem; color:var(--muted);">8 questions • ~4 min<br>pH, pOH, [H⁺], [OH⁻] calculations</div>
+      </div>
+      <div class="card" style="cursor:pointer;" onclick="startQuiz('concepts')">
+        <div class="card-label">Quick Drill</div>
+        <div style="font-size:1rem; font-weight:600; margin-bottom:0.35rem;">Concepts &amp; Theory</div>
+        <div style="font-size:0.82rem; color:var(--muted);">8 questions • ~4 min<br>Theories, strong vs weak, litmus</div>
+      </div>
+      <div class="card" style="cursor:pointer;" onclick="startQuiz('equilibrium')">
+        <div class="card-label">Quick Drill</div>
+        <div style="font-size:1rem; font-weight:600; margin-bottom:0.35rem;">Equilibrium &amp; Buffers</div>
+        <div style="font-size:0.82rem; color:var(--muted);">7 questions • ~4 min<br>Ka, Kb, ICE tables, Henderson-Hasselbalch</div>
+      </div>
+      <div class="card" style="cursor:pointer; border-color:rgba(91,156,246,0.4);" onclick="startQuiz('conjugate')">
+        <div class="card-label" style="color:var(--blue);">Focused Drill</div>
+        <div style="font-size:1rem; font-weight:600; margin-bottom:0.35rem;">Conjugate Pairs</div>
+        <div style="font-size:0.82rem; color:var(--muted);">12 questions • ~6 min<br>Identify pairs, amphoteric species, Ka×Kb</div>
+      </div>
+      <div class="card" style="cursor:pointer; border-color:rgba(245,166,35,0.4);" onclick="startQuiz('titration')">
+        <div class="card-label" style="color:var(--amber);">Focused Drill</div>
+        <div style="font-size:1rem; font-weight:600; margin-bottom:0.35rem;">Titration &amp; Indicators</div>
+        <div style="font-size:0.82rem; color:var(--muted);">8 questions • ~4 min<br>Curves, equiv. points, indicator selection</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="quiz-active" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <div style="font-size:0.82rem; color:var(--muted);">Question <span id="q-num">1</span> of <span id="q-total">20</span></div>
+      <div style="display:flex; gap:1rem; align-items:center;">
+        <span style="font-size:0.82rem; color:var(--accent);">Score: <span id="q-score">0</span></span>
+        <button class="btn" onclick="endQuiz()" style="font-size:0.75rem; padding:0.3rem 0.7rem;">End Quiz</button>
+      </div>
+    </div>
+    <div style="height:4px; background:var(--border); border-radius:2px; margin-bottom:1.5rem;">
+      <div id="q-progress" style="height:100%; background:var(--accent); border-radius:2px; transition:width 0.3s; width:0%"></div>
+    </div>
+
+    <div class="card" id="q-card">
+      <div class="card-label" id="q-topic-label">pH Calculations</div>
+      <div id="q-stem" style="font-size:1rem; font-weight:500; margin-bottom:1.25rem; line-height:1.6;"></div>
+      <div id="q-options"></div>
+      <div id="q-feedback" style="display:none; margin-top:1rem;"></div>
+      <div style="margin-top:1.25rem; text-align:right;">
+        <button class="btn" id="q-next-btn" onclick="nextQuestion()" style="display:none;">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="quiz-results" style="display:none;">
+    <div class="card" style="text-align:center; padding:2rem;">
+      <div style="font-size:0.82rem; color:var(--muted); margin-bottom:0.5rem;">Quiz Complete</div>
+      <div class="big-ph" id="res-score-display" style="margin-bottom:0.5rem;"></div>
+      <div style="font-size:0.9rem; color:var(--muted);" id="res-grade"></div>
+    </div>
+    <div id="res-breakdown" style="margin-top:1rem;"></div>
+    <div style="text-align:center; margin-top:1rem;">
+      <button class="btn" onclick="showQuizStart()">← Back to Quiz Menu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== UTILITIES ====================
+function toSci(val) {
+  if (val === 0) return '0';
+  const exp = Math.floor(Math.log10(val));
+  const coeff = val / Math.pow(10, exp);
+  const c = coeff.toFixed(2);
+  const sup = exp.toString().split('').map(ch => {
+    if (ch === '-') return '⁻';
+    return ['⁰','¹','²','³','⁴','⁵','⁶','⁷','⁸','⁹'][+ch];
+  }).join('');
+  return c + '×10' + sup;
+}
+
+// ==================== TAB 1: pH SCALE ====================
+function updatePH(v) {
+  v = parseFloat(v);
+  const pOH = 14 - v;
+  const H = Math.pow(10, -v);
+  const OH = Math.pow(10, -pOH);
+
+  document.getElementById('ph-display').textContent = v.toFixed(1);
+  document.getElementById('m-ph').textContent = v.toFixed(2);
+  document.getElementById('m-poh').textContent = pOH.toFixed(2);
+  document.getElementById('m-h').textContent = toSci(H);
+  document.getElementById('m-oh').textContent = toSci(OH);
+  document.getElementById('ph-marker').style.left = (v / 14 * 100) + '%';
+  document.getElementById('kw-ph').textContent = '−log(' + toSci(H) + ')';
+  document.getElementById('kw-poh').textContent = '−log(' + toSci(OH) + ')';
+  document.getElementById('kw-product').textContent = toSci(H * OH);
+
+  const badge = document.getElementById('zone-badge');
+  if (v < 7) { badge.className='zone-badge zone-acid'; badge.textContent='Acid'; }
+  else if (v > 7) { badge.className='zone-badge zone-base'; badge.textContent='Base'; }
+  else { badge.className='zone-badge zone-neutral'; badge.textContent='Neutral'; }
+
+  // Litmus
+  const lr = document.getElementById('lit-red');
+  const lb = document.getElementById('lit-blue');
+  const lrr = document.getElementById('lit-red-result');
+  const lbr = document.getElementById('lit-blue-result');
+  if (v < 7) {
+    lr.style.background='#3a1515'; lr.style.color='#ff8080'; lrr.textContent='Stays red';
+    lb.style.background='#3a1515'; lb.style.color='#ff8080'; lbr.textContent='Turns red';
+  } else if (v > 7) {
+    lr.style.background='#151a3a'; lr.style.color='#80a0ff'; lrr.textContent='Turns blue';
+    lb.style.background='#151a3a'; lb.style.color='#80a0ff'; lbr.textContent='Stays blue';
+  } else {
+    lr.style.background='#1e2636'; lr.style.color='#7a8499'; lrr.textContent='No change';
+    lb.style.background='#1e2636'; lb.style.color='#7a8499'; lbr.textContent='No change';
+  }
+
+  // Bracket bars
+  const rows = document.getElementById('bracket-rows');
+  const hMax = 1, ohMax = 1;
+  const hPct = Math.min(100, H / 10 * 100);
+  const ohPct = Math.min(100, OH / 10 * 100);
+  const logH = Math.max(0, Math.min(100, (14 - v) / 14 * 100));
+  const logOH = Math.max(0, Math.min(100, v / 14 * 100));
+  rows.innerHTML = `
+    <div class="bracket-row">
+      <span class="bracket-label">[H⁺] conc.</span>
+      <div class="bracket-bar" style="background:linear-gradient(to right,var(--red),#ff8888); width:${logH}%"></div>
+      <span class="bracket-val red">${toSci(H)}</span>
+    </div>
+    <div class="bracket-row">
+      <span class="bracket-label">[OH⁻] conc.</span>
+      <div class="bracket-bar" style="background:linear-gradient(to right,var(--blue),#8ab8ff); width:${logOH}%"></div>
+      <span class="bracket-val blue">${toSci(OH)}</span>
+    </div>`;
+}
+updatePH(7);
+
+// ==================== TAB 2: NOTATION ====================
+const notationExamples = [
+  { conc: 1e-3, label: '1×10⁻³ → pH 3.0' },
+  { conc: 5e-3, label: '5×10⁻³ → pH 2.3' },
+  { conc: 1e-2, label: '1×10⁻² → pH 2.0' },
+  { conc: 3e-5, label: '3×10⁻⁵ → pH 4.5' },
+  { conc: 7.5e-8, label: '7.5×10⁻⁸ → pH 7.1' },
+  { conc: 2e-11, label: '2×10⁻¹¹ → pH 10.7' },
+];
+
+function renderNotationExamples() {
+  const g = document.getElementById('notation-examples');
+  g.innerHTML = notationExamples.map((ex, i) => {
+    const pH = -Math.log10(ex.conc);
+    const exp = Math.floor(Math.log10(ex.conc));
+    const coeff = ex.conc / Math.pow(10, exp);
+    return `<div class="step-card" onclick="selectNotation(${i})" id="nc-${i}">
+      <div class="step-conc">${coeff.toFixed(coeff % 1 === 0 ? 0 : 1)}×10<sup>${exp}</sup></div>
+      <div class="step-ph">${pH.toFixed(2)}</div>
+      <div class="step-label">pH</div>
+    </div>`;
+  }).join('');
+}
+
+function selectNotation(i) {
+  document.querySelectorAll('.step-card').forEach((c,j) => c.classList.toggle('sel', j===i));
+  const ex = notationExamples[i];
+  showNotationDetail(ex.conc);
+}
+
+function showNotationDetail(conc) {
+  const exp = Math.floor(Math.log10(conc));
+  const coeff = conc / Math.pow(10, exp);
+  const pH = -Math.log10(conc);
+  const phInt = Math.floor(pH);
+  const phDec = (pH % 1).toFixed(4).slice(1);
+  const logCoeff = -Math.log10(coeff);
+  const inner = document.getElementById('notation-inner');
+  inner.innerHTML = `
+    <div class="notation-display">
+      <div>
+        <span class="big-sci">[H⁺] = <span class="highlight-coeff">${coeff.toFixed(coeff % 1 === 0 ? 1 : 2)}</span> × 10<sup class="highlight-exp">${exp}</sup></span>
+      </div>
+      <span class="arrow-down">↓</span>
+      <div style="font-size:0.85rem; color:var(--muted); margin-bottom:0.5rem;">pH = −log(<span class="highlight-coeff">${coeff.toFixed(2)}</span> × 10<sup class="highlight-exp">${exp}</sup>) = −log(<span class="highlight-coeff">${coeff.toFixed(2)}</span>) − (<span class="highlight-exp">${exp}</span>)</div>
+      <div style="font-size:0.85rem; color:var(--muted); margin-bottom:0.75rem;">= <span class="highlight-coeff">${logCoeff.toFixed(4)}</span> + <span class="highlight-exp">${-exp}</span> = <span style="color:var(--text);">${(-exp).toFixed(0)} + ${logCoeff.toFixed(4)}</span></div>
+      <div class="big-ph"><span class="highlight-ph-int">${phInt}</span>.<span class="highlight-ph-dec">${(pH - phInt).toFixed(4).slice(2)}</span></div>
+      <div class="notation-parts">
+        <div class="notation-part">
+          <div class="big highlight-ph-int">${phInt}</div>
+          <div class="desc">Integer part<br>= −(exponent) = −(<span class="highlight-exp">${exp}</span>)</div>
+        </div>
+        <div class="notation-part" style="color:var(--muted); font-size:1.5rem; align-self:center;">.</div>
+        <div class="notation-part">
+          <div class="big highlight-ph-dec">${(pH - phInt).toFixed(3).slice(2)}</div>
+          <div class="desc">Mantissa<br>= −log(<span class="highlight-coeff">${coeff.toFixed(2)}</span>)</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function updateNotation() {
+  const c = parseFloat(document.getElementById('coeff-sel').value);
+  const e = parseFloat(document.getElementById('exp-sel').value);
+  const conc = c * Math.pow(10, e);
+  const pH = -Math.log10(conc);
+  const phInt = Math.floor(pH);
+  const pOH = 14 - pH;
+  const display = document.getElementById('custom-notation-display');
+  display.innerHTML = `
+    <div class="big-sci" style="margin-bottom:0.75rem;">[H⁺] = <span class="highlight-coeff">${c.toFixed(1)}</span> × 10<sup class="highlight-exp">${e}</sup></div>
+    <div class="big-ph"><span class="highlight-ph-int">${phInt}</span>.<span class="highlight-ph-dec">${(pH - phInt).toFixed(3).slice(2)}</span></div>
+    <div style="font-size:0.82rem; color:var(--muted); margin-top:0.75rem;">
+      pOH = ${pOH.toFixed(2)} &nbsp;|&nbsp; [OH⁻] = ${toSci(Math.pow(10,-pOH))}
+    </div>`;
+}
+
+renderNotationExamples();
+selectNotation(0);
+updateNotation();
+
+// ==================== TAB 3: THEORIES ====================
+const theories = [
+  {
+    name: 'Arrhenius', year: '1884',
+    acid: 'Produces H⁺ ions in aqueous solution',
+    base: 'Produces OH⁻ ions in aqueous solution',
+    limit: 'Only works in water. Cannot explain NH₃ as a base.',
+    examples: ['HCl → H⁺ + Cl⁻', 'NaOH → Na⁺ + OH⁻'],
+    color: '#ff6b6b'
+  },
+  {
+    name: 'Brønsted-Lowry', year: '1923',
+    acid: 'Proton (H⁺) donor',
+    base: 'Proton (H⁺) acceptor',
+    limit: 'Does not cover reactions without H⁺ transfer (e.g. Lewis-only reactions like BF₃ + NH₃).',
+    examples: ['HCl + H₂O → H₃O⁺ + Cl⁻', 'NH₃ + H₂O ⇌ NH₄⁺ + OH⁻'],
+    color: '#f5a623'
+  },
+  {
+    name: 'Lewis', year: '1923',
+    acid: 'Electron pair acceptor',
+    base: 'Electron pair donor',
+    limit: 'Most general — covers everything above plus non-protic reactions. Harder to predict strength.',
+    examples: ['BF₃ + :NH₃ → F₃B←NH₃', 'Fe³⁺ + 6H₂O → [Fe(H₂O)₆]³⁺'],
+    color: '#3ecf8e'
+  }
+];
+
+function renderTheories() {
+  const g = document.getElementById('theory-cards');
+  g.innerHTML = theories.map((t, i) => `
+    <div class="theory-card ${i===1?'selected':''}" onclick="selectTheory(${i})" id="tc-${i}">
+      <div class="theory-name" style="color:${t.color}">${t.name}</div>
+      <div class="theory-year">(${t.year})</div>
+      <div class="theory-def"><strong>Acid:</strong> ${t.acid}</div>
+      <div class="theory-def"><strong>Base:</strong> ${t.base}</div>
+    </div>`).join('');
+}
+
+function selectTheory(i) {
+  document.querySelectorAll('.theory-card').forEach((c,j) => c.classList.toggle('selected', j===i));
+  const t = theories[i];
+  document.getElementById('theory-detail-inner').innerHTML = `
+    <div style="margin-bottom:1rem;">
+      <span class="chip ${i===0?'chip-red':i===1?'chip-amber':'chip-green'}">${t.name} Theory</span>
+    </div>
+    <div class="theory-def"><strong>Limitation:</strong> ${t.limit}</div>
+    <div style="margin-top:1rem; font-size:0.82rem; color:var(--muted); margin-bottom:0.35rem;">Examples:</div>
+    ${t.examples.map(e => `<div class="example-box">${e}</div>`).join('')}`;
+}
+
+renderTheories();
+selectTheory(1);
+
+// ==================== TAB 4: CONJUGATE ====================
+const rxns = [
+  {
+    reactants: ['HCl', 'H₂O'],
+    products: ['H₃O⁺', 'Cl⁻'],
+    acid: 'HCl', base: 'H₂O', conjAcid: 'H₃O⁺', conjBase: 'Cl⁻',
+    note: 'HCl is a strong acid — essentially complete dissociation. Cl⁻ is an extremely weak conjugate base.',
+    arrow: '→'
+  },
+  {
+    reactants: ['CH₃COOH', 'H₂O'],
+    products: ['H₃O⁺', 'CH₃COO⁻'],
+    acid: 'CH₃COOH', base: 'H₂O', conjAcid: 'H₃O⁺', conjBase: 'CH₃COO⁻',
+    note: 'Acetic acid partially donates a proton to water. Acetate (CH₃COO⁻) is a meaningful conjugate base — it can accept H⁺ back.',
+    arrow: '⇌'
+  },
+  {
+    reactants: ['NH₃', 'H₂O'],
+    products: ['NH₄⁺', 'OH⁻'],
+    acid: 'H₂O', base: 'NH₃', conjAcid: 'NH₄⁺', conjBase: 'OH⁻',
+    note: 'Here water acts as the acid (proton donor). NH₃ accepts it. NH₄⁺ is the conjugate acid of NH₃.',
+    arrow: '⇌'
+  },
+  {
+    reactants: ['H₂CO₃', 'H₂O'],
+    products: ['H₃O⁺', 'HCO₃⁻'],
+    acid: 'H₂CO₃', base: 'H₂O', conjAcid: 'H₃O⁺', conjBase: 'HCO₃⁻',
+    note: 'First dissociation of carbonic acid. HCO₃⁻ is amphoteric — it can donate or accept a proton.',
+    arrow: '⇌'
+  },
+  {
+    reactants: ['HCO₃⁻', 'H₂O'],
+    products: ['H₃O⁺', 'CO₃²⁻'],
+    acid: 'HCO₃⁻', base: 'H₂O', conjAcid: 'H₃O⁺', conjBase: 'CO₃²⁻',
+    note: 'Second dissociation — HCO₃⁻ now acts as the acid. This demonstrates amphoteric behavior.',
+    arrow: '⇌'
+  },
+  {
+    reactants: ['H₂O', 'H₂O'],
+    products: ['H₃O⁺', 'OH⁻'],
+    acid: 'H₂O', base: 'H₂O', conjAcid: 'H₃O⁺', conjBase: 'OH⁻',
+    note: 'Autoionization of water. Water is amphoteric — one molecule donates a proton while the other accepts it. Kw = 1×10⁻¹⁴.',
+    arrow: '⇌'
+  }
+];
+
+function updateConjugate() {
+  const i = parseInt(document.getElementById('rxn-sel').value);
+  const r = rxns[i];
+  const disp = document.getElementById('rxn-display');
+  disp.innerHTML = `
+    <div class="equation">
+      <span class="eq-acid">${r.reactants[0]}</span>
+      <span style="color:var(--muted)"> + </span>
+      <span class="eq-base">${r.reactants[1]}</span>
+      <span class="eq-arrow">${r.arrow}</span>
+      <span class="eq-conj-acid">${r.products[0]}</span>
+      <span style="color:var(--muted)"> + </span>
+      <span class="eq-conj-base">${r.products[1]}</span>
+    </div>
+    <p style="font-size:0.82rem; color:var(--muted); margin-top:0.5rem;">${r.note}</p>`;
+
+  document.getElementById('pair-cards').innerHTML = `
+    <div class="card">
+      <div class="card-label" style="color:var(--red);">Pair 1 — Acid/Conjugate Base</div>
+      <div class="info-row">
+        <span>Acid (H⁺ donor)</span>
+        <span class="mono eq-acid">${r.acid}</span>
+      </div>
+      <div class="info-row">
+        <span style="padding-left:0.5rem;">−H⁺ gives...</span>
+        <span class="mono eq-conj-base">${r.conjBase}</span>
+      </div>
+      <div class="info-row" style="font-size:0.75rem;">
+        <span style="color:var(--muted)">Differ by:</span><span class="mono" style="color:var(--muted)">one H⁺</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label" style="color:var(--blue);">Pair 2 — Base/Conjugate Acid</div>
+      <div class="info-row">
+        <span>Base (H⁺ acceptor)</span>
+        <span class="mono eq-base">${r.base}</span>
+      </div>
+      <div class="info-row">
+        <span style="padding-left:0.5rem;">+H⁺ gives...</span>
+        <span class="mono eq-conj-acid">${r.conjAcid}</span>
+      </div>
+      <div class="info-row" style="font-size:0.75rem;">
+        <span style="color:var(--muted)">Differ by:</span><span class="mono" style="color:var(--muted)">one H⁺</span>
+      </div>
+    </div>`;
+}
+updateConjugate();
+
+// ==================== TAB 5: STRENGTH ====================
+function updateDissociation() {
+  const type = document.getElementById('dis-sel').value;
+  const canvas = document.getElementById('dis-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || 500;
+  canvas.height = 160;
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const configs = {
+    'strong-acid': { pct: 1.0, label:'HCl → H⁺ + Cl⁻', info:'100% dissociation. All HCl molecules split. No HCl remains at equilibrium.', color:'#ff6b6b' },
+    'weak-acid': { pct: 0.05, label:'CH₃COOH ⇌ H⁺ + CH₃COO⁻', info:'~5% dissociation (Ka = 1.8×10⁻⁵ at 0.1 M). Most molecules remain intact.', color:'#f5a623' },
+    'strong-base': { pct: 1.0, label:'NaOH → Na⁺ + OH⁻', info:'100% dissociation. Strong electrolyte.', color:'#5b9cf6' },
+    'weak-base': { pct: 0.013, label:'NH₃ + H₂O ⇌ NH₄⁺ + OH⁻', info:'~1.3% reaction (Kb = 1.8×10⁻⁵ at 0.1 M). Most NH₃ remains unreacted.', color:'#a0c4ff' },
+  };
+  const cfg = configs[type];
+  document.getElementById('dis-info').innerHTML = `<strong style="color:${cfg.color}">${cfg.label}</strong><br>${cfg.info}`;
+
+  const total = 30;
+  const reacted = Math.round(total * cfg.pct);
+  const unreacted = total - reacted;
+  const r = 7;
+  let drawn = 0;
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 10; col++) {
+      const x = 20 + col * (r*2 + 6);
+      const y = 20 + row * (r*2 + 6);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI*2);
+      ctx.fillStyle = drawn < unreacted ? cfg.color + '44' : cfg.color;
+      ctx.strokeStyle = cfg.color;
+      ctx.lineWidth = 1.5;
+      ctx.fill(); ctx.stroke();
+      if (drawn >= unreacted) {
+        ctx.fillStyle = '#fff';
+        ctx.font = '8px monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('±', x, y);
+      }
+      drawn++;
+    }
+  }
+  ctx.fillStyle = '#7a8499';
+  ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText(`${(cfg.pct*100).toFixed(0)}% dissociated   `, W - 160, H - 12);
+  ctx.fillStyle = cfg.color;
+  ctx.fillRect(W - 170, H - 18, 8, 8);
+}
+
+function updateKa() {
+  const C = parseFloat(document.getElementById('ka-c').value) / 100;
+  const alpha = parseFloat(document.getElementById('ka-a').value) / 100;
+  document.getElementById('ka-c-val').textContent = C.toFixed(2) + ' M';
+  document.getElementById('ka-a-val').textContent = (alpha*100).toFixed(0) + '%';
+  const H = C * alpha;
+  const Ka = (H * H) / (C - H);
+  const pH = -Math.log10(H);
+  document.getElementById('ka-display').innerHTML =
+    `Ka = (${toSci(H)})² / (${C.toFixed(2)} − ${toSci(H)}) = <span style="color:var(--accent)">${toSci(Ka)}</span>`;
+  document.getElementById('ka-h').textContent = toSci(H);
+  document.getElementById('ka-ph').textContent = pH.toFixed(2);
+}
+updateDissociation();
+updateKa();
+
+// ==================== TAB 6: BUFFER ====================
+function updateBuffer() {
+  const pKa = parseFloat(document.getElementById('buf-acid').value);
+  const r = parseInt(document.getElementById('buf-ratio').value);
+  const ratio = Math.pow(10, r / 10);
+  const pH = pKa + Math.log10(ratio);
+  const ratioStr = ratio >= 1 ? ratio.toFixed(1) + ':1' : '1:' + (1/ratio).toFixed(1);
+  document.getElementById('buf-ratio-val').textContent = ratioStr;
+  document.getElementById('hh-result').textContent = 'pH = ' + pH.toFixed(2);
+  drawTitration();
+}
+
+function calcTitrationPH(type, vAdded) {
+  // All titrations: 30 mL of analyte at 0.1 M titrated with 0.1 M titrant
+  // Volumes in mL, concentrations in mol/L
+  const Va = 30, Ca = 0.1, Ct = 0.1;
+  const molesA = Va * Ca / 1000;  // initial moles of analyte
+  const molesT = vAdded * Ct / 1000; // moles titrant added
+
+  if (type === 'sa-sb') {
+    // Strong acid (HCl) + Strong base (NaOH)
+    if (vAdded < Va) {
+      const excessH = molesA - molesT;
+      const totalV = (Va + vAdded) / 1000;
+      return -Math.log10(excessH / totalV);
+    } else if (Math.abs(vAdded - Va) < 0.01) {
+      return 7.0;
+    } else {
+      const excessOH = molesT - molesA;
+      const totalV = (Va + vAdded) / 1000;
+      const pOH = -Math.log10(excessOH / totalV);
+      return 14 - pOH;
+    }
+  }
+
+  if (type === 'wa-sb') {
+    // Weak acid (acetic, pKa=4.74) + Strong base (NaOH)
+    const pKa = 4.74;
+    const Ka = Math.pow(10, -pKa);
+    if (vAdded < 0.5) {
+      // Initial weak acid — solve quadratic: x² + Ka*x - Ka*Ca = 0
+      const x = (-Ka + Math.sqrt(Ka*Ka + 4*Ka*Ca)) / 2;
+      return -Math.log10(x);
+    } else if (vAdded < Va - 0.5) {
+      // Buffer region — Henderson-Hasselbalch
+      const molesBase = molesT;
+      const molesAcid = molesA - molesT;
+      return pKa + Math.log10(molesBase / molesAcid);
+    } else if (Math.abs(vAdded - Va) < 0.5) {
+      // Equivalence point — weak base (conjugate) hydrolysis
+      const Cb = molesA / ((Va + vAdded) / 1000);
+      const Kb = 1e-14 / Ka;
+      const x = (-Kb + Math.sqrt(Kb*Kb + 4*Kb*Cb)) / 2;
+      const pOH = -Math.log10(x);
+      return 14 - pOH;
+    } else {
+      // Excess strong base dominates
+      const excessOH = molesT - molesA;
+      const totalV = (Va + vAdded) / 1000;
+      return 14 + Math.log10(excessOH / totalV);
+    }
+  }
+
+  if (type === 'sb-sa') {
+    // Strong base (NaOH) + Strong acid (HCl) — mirror of sa-sb
+    if (vAdded < Va) {
+      const excessOH = molesA - molesT;
+      const totalV = (Va + vAdded) / 1000;
+      return 14 + Math.log10(excessOH / totalV);
+    } else if (Math.abs(vAdded - Va) < 0.01) {
+      return 7.0;
+    } else {
+      const excessH = molesT - molesA;
+      const totalV = (Va + vAdded) / 1000;
+      return -Math.log10(excessH / totalV);
+    }
+  }
+
+  if (type === 'wb-sa') {
+    // Weak base (NH₃, pKb=4.74, pKa of conj=9.26) + Strong acid (HCl)
+    const pKb = 4.74;
+    const Kb = Math.pow(10, -pKb);
+    const Ka = 1e-14 / Kb;
+    const pKa = -Math.log10(Ka);
+    if (vAdded < 0.5) {
+      const x = (-Kb + Math.sqrt(Kb*Kb + 4*Kb*Ca)) / 2;
+      return 14 + Math.log10(x);
+    } else if (vAdded < Va - 0.5) {
+      // Buffer: mixture of NH₃ and NH₄⁺
+      const molesAcid = molesT;       // NH₄⁺ formed
+      const molesBase = molesA - molesT; // remaining NH₃
+      return pKa + Math.log10(molesBase / molesAcid);
+    } else if (Math.abs(vAdded - Va) < 0.5) {
+      // Equivalence: all NH₄⁺ — weak acid hydrolysis
+      const Ca2 = molesA / ((Va + vAdded) / 1000);
+      const x = (-Ka + Math.sqrt(Ka*Ka + 4*Ka*Ca2)) / 2;
+      return -Math.log10(x);
+    } else {
+      const excessH = molesT - molesA;
+      const totalV = (Va + vAdded) / 1000;
+      return -Math.log10(excessH / totalV);
+    }
+  }
+  return 7;
+}
+
+function drawTitration() {
+  const type = document.getElementById('tit-type').value;
+  const canvas = document.getElementById('tit-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || 500;
+  const W = canvas.width, H = 220;
+  ctx.clearRect(0,0,W,H);
+
+  const pad = { t:20, r:20, b:40, l:50 };
+  const gW = W - pad.l - pad.r;
+  const gH = H - pad.t - pad.b;
+
+  function toX(v) { return pad.l + v/60*gW; }
+  function toY(pH) { return pad.t + (1 - Math.max(0,Math.min(14,pH))/14) * gH; }
+
+  // Grid & axes
+  ctx.strokeStyle = '#ffffff22'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t+gH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pad.l, pad.t+gH); ctx.lineTo(pad.l+gW, pad.t+gH); ctx.stroke();
+  for (let pH = 0; pH <= 14; pH += 2) {
+    const y = toY(pH);
+    ctx.strokeStyle = '#ffffff11';
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l+gW, y); ctx.stroke();
+    ctx.fillStyle = '#7a8499'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(pH, pad.l-4, y+4);
+  }
+  for (let v = 0; v <= 60; v += 10) {
+    const x = toX(v);
+    ctx.strokeStyle = '#ffffff11';
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t+gH); ctx.stroke();
+    ctx.fillStyle = '#7a8499'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(v, x, pad.t+gH+14);
+  }
+  ctx.fillStyle = '#7a8499'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('mL titrant added', pad.l + gW/2, H - 2);
+  ctx.fillStyle = '#7a8499'; ctx.save(); ctx.translate(12, pad.t + gH/2);
+  ctx.rotate(-Math.PI/2); ctx.textAlign='center'; ctx.fillText('pH', 0, 0); ctx.restore();
+
+  const colors = { 'sa-sb':'#ff6b6b','wa-sb':'#f5a623','sb-sa':'#5b9cf6','wb-sa':'#a0c4ff' };
+  const color = colors[type];
+
+  // Draw curve in segments to handle the vertical jump at equivalence
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+  let started = false, lastPH = null;
+  for (let v = 0; v <= 60; v += 0.25) {
+    const pH = calcTitrationPH(type, v);
+    // Break the line if pH jumps more than 3 units (the vertical equivalence jump)
+    if (lastPH !== null && Math.abs(pH - lastPH) > 3 && v > 25 && v < 35) {
+      ctx.stroke();
+      ctx.beginPath(); started = false;
+    }
+    if (!started) { ctx.beginPath(); ctx.moveTo(toX(v), toY(pH)); started = true; }
+    else ctx.lineTo(toX(v), toY(pH));
+    lastPH = pH;
+  }
+  ctx.stroke();
+
+  // Equivalence point dot
+  const eqPH = calcTitrationPH(type, 30);
+  ctx.beginPath(); ctx.arc(toX(30), toY(eqPH), 5, 0, Math.PI*2);
+  ctx.fillStyle = '#3ecf8e'; ctx.fill();
+
+  // Half-equivalence marker for weak acid/base
+  if (type === 'wa-sb') {
+    const halfPH = calcTitrationPH(type, 15);
+    const y = toY(halfPH);
+    ctx.strokeStyle = '#ffffff33'; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(toX(15), y); ctx.lineTo(toX(30), y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#f5a623'; ctx.font = '10px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('½ equiv → pH=pKa=4.74', toX(1), y - 5);
+  }
+  if (type === 'wb-sa') {
+    const halfPH = calcTitrationPH(type, 15);
+    const y = toY(halfPH);
+    ctx.strokeStyle = '#ffffff33'; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(toX(15), y); ctx.lineTo(toX(30), y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#a0c4ff'; ctx.font = '10px monospace'; ctx.textAlign = 'left';
+    ctx.fillText('½ equiv → pH=pKa=9.26', toX(1), y + 12);
+  }
+
+  const labels = {
+    'sa-sb': `Equiv. pt: pH = 7.00 | Strong acid → salt (neutral)`,
+    'wa-sb': `Equiv. pt: pH = ${calcTitrationPH('wa-sb',30).toFixed(2)} | Weak acid → basic salt`,
+    'sb-sa': `Equiv. pt: pH = 7.00 | Strong base → salt (neutral)`,
+    'wb-sa': `Equiv. pt: pH = ${calcTitrationPH('wb-sa',30).toFixed(2)} | Weak base → acidic salt`,
+  };
+  document.getElementById('tit-legend').innerHTML =
+    `<span style="color:${color}">●</span> ${labels[type]} &nbsp;&nbsp; <span style="color:#3ecf8e">●</span> Equivalence point`;
+}
+
+updateBuffer();
+setTimeout(drawTitration, 100);
+
+// ==================== TAB SWITCHING ====================
+function showTab(id) {
+  document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  const tabs = ['ph-scale','notation','theories','conjugate','strength','buffer','ice','quiz'];
+  document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
+
+  if (id === 'strength') { setTimeout(() => { updateDissociation(); updateKa(); }, 50); }
+  if (id === 'buffer') { setTimeout(drawTitration, 50); }
+  if (id === 'ice') { setTimeout(updateICE, 50); }
+}
+
+// ==================== ICE TABLE ====================
+const iceAcids = {
+  acetic:   { label:'CH₃COOH', conjLabel:'CH₃COO⁻', Ka:1.8e-5,  isAcid:true,  name:'Acetic acid' },
+  hf:       { label:'HF',       conjLabel:'F⁻',       Ka:6.8e-4,  isAcid:true,  name:'Hydrofluoric acid' },
+  hcn:      { label:'HCN',      conjLabel:'CN⁻',      Ka:6.2e-10, isAcid:true,  name:'Hydrocyanic acid' },
+  hno2:     { label:'HNO₂',     conjLabel:'NO₂⁻',     Ka:4.5e-4,  isAcid:true,  name:'Nitrous acid' },
+  nh3:      { label:'NH₃',      conjLabel:'NH₄⁺',     Ka:1.8e-5,  isAcid:false, name:'Ammonia' },
+  pyridine: { label:'C₅H₅N',    conjLabel:'C₅H₅NH⁺',  Ka:1.7e-9,  isAcid:false, name:'Pyridine' },
+};
+
+function updateICE() {
+  const key = document.getElementById('ice-sel').value;
+  const concRaw = parseInt(document.getElementById('ice-conc').value);
+  const C = concRaw / 1000; // 1–200 → 0.001–0.200 M
+  document.getElementById('ice-conc-val').textContent = C.toFixed(3) + ' M';
+
+  const acid = iceAcids[key];
+  const Ka = acid.Ka;
+  const isAcid = acid.isAcid;
+  const Keq = isAcid ? Ka : Ka; // Kb stored as Ka field for bases
+
+  // Reaction display
+  if (isAcid) {
+    document.getElementById('ice-reaction').innerHTML =
+      `<span class="eq-acid">${acid.label}</span> <span class="muted">+ H₂O</span> <span class="eq-arrow">⇌</span> <span class="eq-conj-acid">H⁺</span> <span class="muted">+</span> <span class="eq-conj-base">${acid.conjLabel}</span>`;
+    document.getElementById('ice-th-acid').textContent = acid.label;
+    document.getElementById('ice-th-conj').textContent = acid.conjLabel;
+  } else {
+    document.getElementById('ice-reaction').innerHTML =
+      `<span class="eq-base">${acid.label}</span> <span class="muted">+ H₂O</span> <span class="eq-arrow">⇌</span> <span class="eq-conj-acid">${acid.conjLabel}</span> <span class="muted">+</span> <span class="eq-conj-base">OH⁻</span>`;
+    document.getElementById('ice-th-acid').textContent = acid.label;
+    document.getElementById('ice-th-conj').textContent = acid.conjLabel;
+  }
+
+  // Solve quadratic: x² + Ka*x - Ka*C = 0
+  const x_exact = (-Keq + Math.sqrt(Keq*Keq + 4*Keq*C)) / 2;
+  const x_approx = Math.sqrt(Keq * C);
+  const pctDis = (x_exact / C) * 100;
+  const fiveOk = pctDis < 5;
+
+  // ICE table values
+  document.getElementById('ice-i-acid').textContent = C.toFixed(4) + ' M';
+  document.getElementById('ice-c-acid').textContent = '−' + x_exact.toFixed(5) + ' M';
+  document.getElementById('ice-c-h').textContent = '+' + x_exact.toFixed(5) + ' M';
+  document.getElementById('ice-c-conj').textContent = '+' + x_exact.toFixed(5) + ' M';
+  document.getElementById('ice-e-acid').textContent = (C - x_exact).toFixed(5) + ' M';
+  document.getElementById('ice-e-h').textContent = x_exact.toFixed(5) + ' M';
+  document.getElementById('ice-e-conj').textContent = x_exact.toFixed(5) + ' M';
+
+  // Ka/Kb expression
+  const keqLabel = isAcid ? 'Ka' : 'Kb';
+  const numLabel = isAcid ? '[H⁺][' + acid.conjLabel + ']' : '[' + acid.conjLabel + '][OH⁻]';
+  document.getElementById('ice-ka-expr').innerHTML =
+    `${keqLabel} = <u>${numLabel}</u> / [${acid.label}]<br>` +
+    `= (x)(x) / (${C.toFixed(4)} − x)<br>` +
+    `= x² / (${C.toFixed(4)} − x) = <span class="accent">${toSci(Keq)}</span>`;
+
+  document.getElementById('ice-ka-exact').textContent = toSci(x_exact) + ' M';
+  document.getElementById('ice-5pct').innerHTML = fiveOk
+    ? `<span class="accent">✓ Yes (${pctDis.toFixed(1)}% &lt; 5%)</span>`
+    : `<span class="red">✗ No (${pctDis.toFixed(1)}% — use quadratic)</span>`;
+  document.getElementById('ice-pct-dis').textContent = pctDis.toFixed(2) + '%';
+
+  // Results
+  document.getElementById('ice-res-h').textContent = toSci(x_exact) + ' M';
+  if (isAcid) {
+    const pH = -Math.log10(x_exact);
+    const pOH = 14 - pH;
+    document.getElementById('ice-res-ph-label').textContent = 'pH';
+    document.getElementById('ice-res-poh-label').textContent = 'pOH';
+    document.getElementById('ice-res-ph').textContent = pH.toFixed(2);
+    document.getElementById('ice-res-poh').textContent = pOH.toFixed(2);
+    document.getElementById('ice-res-type').innerHTML = '<span class="red">Acidic</span>';
+  } else {
+    const pOH = -Math.log10(x_exact);
+    const pH = 14 - pOH;
+    document.getElementById('ice-res-ph-label').textContent = 'pH';
+    document.getElementById('ice-res-poh-label').textContent = 'pOH';
+    document.getElementById('ice-res-ph').textContent = pH.toFixed(2);
+    document.getElementById('ice-res-poh').textContent = pOH.toFixed(2);
+    document.getElementById('ice-res-type').innerHTML = '<span class="blue">Basic</span>';
+  }
+
+  const keqSci = toSci(Keq);
+  const approxNote = fiveOk
+    ? `5% rule valid — the approximation x ≈ √(${keqSci} × ${C.toFixed(3)}) = ${toSci(x_approx)} M gives &lt;1% error vs. the quadratic.`
+    : `5% rule fails — you must solve the full quadratic. The approximation x ≈ ${toSci(x_approx)} M overestimates by ${((x_approx-x_exact)/x_exact*100).toFixed(1)}%.`;
+  document.getElementById('ice-note').innerHTML = approxNote;
+
+  // Step-by-step
+  const pH2 = isAcid ? -Math.log10(x_exact) : 14 + Math.log10(x_exact);
+  document.getElementById('ice-steps').innerHTML = `
+    <strong style="color:var(--text)">Step 1 — Write the equilibrium expression:</strong><br>
+    &nbsp;&nbsp;${keqLabel} = [H⁺][${acid.conjLabel}] / [${acid.label}] = x² / (C − x) = ${keqSci}<br><br>
+    <strong style="color:var(--text)">Step 2 — Set up the ICE table with C = ${C.toFixed(3)} M</strong><br>
+    &nbsp;&nbsp;I: [${acid.label}] = ${C.toFixed(4)}, [H⁺] = ~0, [${acid.conjLabel}] = ~0<br>
+    &nbsp;&nbsp;C: −x, +x, +x<br>
+    &nbsp;&nbsp;E: (${C.toFixed(4)} − x), x, x<br><br>
+    <strong style="color:var(--text)">Step 3 — ${fiveOk ? 'Apply 5% approximation:' : 'Solve quadratic (5% fails):'}</strong><br>
+    ${fiveOk
+      ? `&nbsp;&nbsp;x ≈ √(${keqSci} × ${C.toFixed(3)}) = ${toSci(x_approx)} M`
+      : `&nbsp;&nbsp;x² + ${keqSci}·x − ${keqSci}·${C.toFixed(3)} = 0<br>&nbsp;&nbsp;x = [−${keqSci} + √(${keqSci}² + 4·${keqSci}·${C.toFixed(3)})] / 2`}
+    <br>&nbsp;&nbsp;x = <strong style="color:var(--accent)">${toSci(x_exact)} M</strong><br><br>
+    <strong style="color:var(--text)">Step 4 — Calculate pH:</strong><br>
+    ${isAcid
+      ? `&nbsp;&nbsp;pH = −log(${toSci(x_exact)}) = <strong style="color:var(--accent)">${(-Math.log10(x_exact)).toFixed(2)}</strong>`
+      : `&nbsp;&nbsp;pOH = −log(${toSci(x_exact)}) = ${(-Math.log10(x_exact)).toFixed(2)}<br>&nbsp;&nbsp;pH = 14 − pOH = <strong style="color:var(--accent)">${(14 + Math.log10(x_exact)).toFixed(2)}</strong>`}
+  `;
+}
+
+// ==================== QUIZ ====================
+const allQuestions = [
+  // pH Calculations
+  { topic:'ph', stem:'What is the pH of a 0.01 M HCl solution?', opts:['1','2','3','12'], ans:1, exp:'HCl is a strong acid — fully dissociates. [H⁺] = 0.01 = 10⁻², so pH = −log(0.01) = 2.' },
+  { topic:'ph', stem:'A solution has [OH⁻] = 1×10⁻⁴ M. What is the pH?', opts:['4','10','−4','−10'], ans:1, exp:'pOH = −log(10⁻⁴) = 4. pH = 14 − 4 = 10.' },
+  { topic:'ph', stem:'What is [H⁺] in a solution with pH = 3.5?', opts:['3.16×10⁻⁴','3.5×10⁻³','3.16×10⁻³','3.5×10⁻⁴'], ans:0, exp:'[H⁺] = 10⁻³·⁵ = 3.16×10⁻⁴ M. The coefficient is 10⁻⁰·⁵ = 0.316, so exponent stays −3 with coefficient 3.16.' },
+  { topic:'ph', stem:'Which solution is the most acidic?', opts:['pH = 3','pH = 7','[H⁺] = 10⁻² M','[OH⁻] = 10⁻² M'], ans:2, exp:'[H⁺] = 10⁻² M means pH = 2, which is more acidic than pH = 3. [OH⁻] = 10⁻² gives pH = 12 (basic).' },
+  { topic:'ph', stem:'If [H⁺] = 5×10⁻⁴ M, what is the approximate pH?', opts:['4.0','3.3','3.0','4.7'], ans:1, exp:'pH = −log(5×10⁻⁴) = −(log5 + log10⁻⁴) = −(0.70 − 4) = 3.30.' },
+  { topic:'ph', stem:'A solution has pH = 11.0. What is [H⁺]?', opts:['1×10⁻³','1×10⁻¹¹','11×10⁻¹','1×10⁻¹'], ans:1, exp:'[H⁺] = 10⁻ᵖᴴ = 10⁻¹¹ M.' },
+  { topic:'ph', stem:'Which correctly states the relationship at 25°C?', opts:['pH + pOH = 7','[H⁺] × [OH⁻] = 10⁻⁷','pH + pOH = 14','pH = pOH always'], ans:2, exp:'At 25°C, Kw = 1×10⁻¹⁴, so pH + pOH = 14. This is the water autoionization constant.' },
+  { topic:'ph', stem:'How many sig figs should pH = 2.34 imply in [H⁺]?', opts:['3 sig figs','2 sig figs — the mantissa carries the sig figs','1 sig fig','4 sig figs'], ans:1, exp:'In pH values, only the digits after the decimal (mantissa) are significant. pH = 2.34 has 2 decimal places → [H⁺] reported to 2 sig figs.' },
+
+  // Concepts & Theory
+  { topic:'concepts', stem:'Which acid-base theory is most general (explains the most reactions)?', opts:['Arrhenius','Brønsted-Lowry','Lewis','Dalton'], ans:2, exp:'Lewis theory defines acids as electron-pair acceptors and bases as electron-pair donors — it covers all Brønsted-Lowry reactions and more, including non-protic systems like BF₃ + NH₃.' },
+  { topic:'concepts', stem:'In the reaction HCl + H₂O → H₃O⁺ + Cl⁻, which species is the Brønsted-Lowry base?', opts:['HCl','H₃O⁺','Cl⁻','H₂O'], ans:3, exp:'H₂O accepts the proton (H⁺) from HCl to form H₃O⁺. The proton acceptor is the Brønsted-Lowry base.' },
+  { topic:'concepts', stem:'What is the conjugate base of H₂PO₄⁻?', opts:['H₃PO₄','HPO₄²⁻','PO₄³⁻','H₂O'], ans:1, exp:'Remove one H⁺ from H₂PO₄⁻ to get HPO₄²⁻. Conjugate base = acid − H⁺.' },
+  { topic:'concepts', stem:'Which of the following is amphoteric?', opts:['HCl','NaOH','HCO₃⁻','Na⁺'], ans:2, exp:'HCO₃⁻ can donate H⁺ (acting as an acid: HCO₃⁻ → CO₃²⁻ + H⁺) or accept H⁺ (acting as a base: HCO₃⁻ + H⁺ → H₂CO₃).' },
+  { topic:'concepts', stem:'A strong acid has a conjugate base that is...', opts:['Also strong','Weak — it has little tendency to accept H⁺ back','Neutral','Amphoteric'], ans:1, exp:'The stronger the acid, the weaker its conjugate base. HCl fully donates H⁺, so Cl⁻ has virtually no affinity to accept it back.' },
+  { topic:'concepts', stem:'Red litmus paper turns blue when dipped in a solution. The solution is...', opts:['Acidic (pH < 7)','Neutral (pH = 7)','Basic (pH > 7)','Impossible to determine'], ans:2, exp:'Red litmus turns blue only in basic (alkaline) solutions. Blue litmus turns red in acidic solutions. Neither changes in neutral solutions.' },
+  { topic:'concepts', stem:'Which of these is NOT a strong acid?', opts:['HCl','HNO₃','HF','HClO₄'], ans:2, exp:'HF (hydrofluoric acid) is a weak acid despite the common misconception — Ka = 6.8×10⁻⁴. The 6 strong acids are HCl, HBr, HI, HNO₃, HClO₄, and H₂SO₄.' },
+  { topic:'concepts', stem:'According to Arrhenius, what does a base produce in water?', opts:['H⁺ ions','OH⁻ ions','Electron pairs','Protons'], ans:1, exp:'Arrhenius defined bases as substances that produce hydroxide ions (OH⁻) in aqueous solution. NaOH → Na⁺ + OH⁻ is the classic example.' },
+
+  // Equilibrium & Buffers
+  { topic:'equilibrium', stem:'For a weak acid HA with Ka = 1×10⁻⁵ and C = 0.1 M, what is the approximate [H⁺]?', opts:['1×10⁻³ M','1×10⁻⁵ M','3.16×10⁻³ M','1×10⁻⁶ M'], ans:2, exp:'Using the 5% approximation: x ≈ √(Ka × C) = √(1×10⁻⁵ × 0.1) = √(10⁻⁶) = 10⁻³. Wait — x = √(10⁻⁶) = 10⁻³. Check: √(10⁻⁵ × 10⁻¹) = √10⁻⁶ = 10⁻³ = 1×10⁻³. But option is 3.16×10⁻³... Ka=1×10⁻⁵, C=0.1: x=√(10⁻⁶)=10⁻³ M.' },
+  { topic:'equilibrium', stem:'The Henderson-Hasselbalch equation is used to calculate pH of...', opts:['Strong acid solutions','Buffer solutions','Pure water','Strong base solutions'], ans:1, exp:'pH = pKa + log([A⁻]/[HA]) is specifically used for buffer systems — mixtures of a weak acid and its conjugate base (or weak base and conjugate acid).' },
+  { topic:'equilibrium', stem:'A buffer is made from acetic acid (pKa = 4.74) with equal concentrations of CH₃COOH and CH₃COO⁻. What is the pH?', opts:['4.74','7.00','9.26','2.37'], ans:0, exp:'When [A⁻] = [HA], log([A⁻]/[HA]) = log(1) = 0. So pH = pKa + 0 = pKa = 4.74.' },
+  { topic:'equilibrium', stem:'In a titration of a weak acid with a strong base, at the half-equivalence point...', opts:['pH = 7','pH = pKa','pH = 14 − pKa','pH = pOH'], ans:1, exp:'At the half-equivalence point, moles of base added = half the moles of acid. This creates a 1:1 ratio of HA to A⁻. By Henderson-Hasselbalch: pH = pKa + log(1) = pKa.' },
+  { topic:'equilibrium', stem:'Which indicator would be best for a titration with equivalence point at pH 9?', opts:['Methyl orange (3.1–4.4)','Methyl red (4.4–6.2)','Bromothymol blue (6.0–7.6)','Phenolphthalein (8.2–10.0)'], ans:3, exp:'The indicator must change color at or very near the equivalence point pH. Phenolphthalein transitions between pH 8.2–10.0, which brackets pH 9.' },
+  { topic:'equilibrium', stem:'For a conjugate acid-base pair, Ka × Kb = ?', opts:['1','Kw (1×10⁻¹⁴)','Ka only','Kb only'], ans:1, exp:'For any conjugate pair: Ka × Kb = Kw = 1×10⁻¹⁴ at 25°C. This also means pKa + pKb = 14.' },
+  { topic:'equilibrium', stem:'A weak acid ICE table shows x = 0.008 M from C = 0.10 M initial. What is the % dissociation?', opts:['0.8%','8%','80%','0.08%'], ans:1, exp:'% dissociation = (x / C) × 100 = (0.008 / 0.10) × 100 = 8%. Since 8% > 5%, the 5% approximation would NOT be valid here.' },
+];
+
+let quizPool = [], quizIdx = 0, quizScore = 0, quizAnswered = false, quizHistory = [];
+
+function startQuiz(mode) {
+  document.getElementById('quiz-start-screen').style.display = 'none';
+  document.getElementById('quiz-active').style.display = 'block';
+  document.getElementById('quiz-results').style.display = 'none';
+  quizScore = 0; quizIdx = 0; quizHistory = [];
+
+  if (mode === 'all') quizPool = shuffle([...allQuestions]).slice(0, 20);
+  else if (mode === 'ph') quizPool = shuffle(allQuestions.filter(q => q.topic === 'ph')).slice(0, 10);
+  else if (mode === 'concepts') quizPool = shuffle(allQuestions.filter(q => q.topic === 'concepts')).slice(0, 10);
+  else if (mode === 'equilibrium') quizPool = shuffle(allQuestions.filter(q => q.topic === 'equilibrium')).slice(0, 10);
+
+  renderQuestion();
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function renderQuestion() {
+  quizAnswered = false;
+  const q = quizPool[quizIdx];
+  const total = quizPool.length;
+  document.getElementById('q-num').textContent = quizIdx + 1;
+  document.getElementById('q-total').textContent = total;
+  document.getElementById('q-score').textContent = quizScore;
+  document.getElementById('q-progress').style.width = (quizIdx / total * 100) + '%';
+  const topicLabels = { ph:'pH Calculations', concepts:'Concepts & Theory', equilibrium:'Equilibrium & Buffers' };
+  document.getElementById('q-topic-label').textContent = topicLabels[q.topic] || q.topic;
+  document.getElementById('q-stem').textContent = q.stem;
+  document.getElementById('q-feedback').style.display = 'none';
+  document.getElementById('q-next-btn').style.display = 'none';
+
+  const optsEl = document.getElementById('q-options');
+  optsEl.innerHTML = q.opts.map((opt, i) =>
+    `<div class="q-opt" id="qopt-${i}" onclick="selectAnswer(${i})" style="
+      background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+      padding:0.75rem 1rem; margin-bottom:0.5rem; cursor:pointer; font-size:0.9rem;
+      transition:border-color 0.15s, background 0.15s; display:flex; align-items:center; gap:0.75rem;">
+      <span style="min-width:22px; height:22px; border-radius:50%; border:1px solid var(--border2);
+        display:inline-flex; align-items:center; justify-content:center; font-size:0.75rem; font-family:var(--mono);">
+        ${['A','B','C','D'][i]}
+      </span>
+      <span>${opt}</span>
+    </div>`
+  ).join('');
+}
+
+function selectAnswer(i) {
+  if (quizAnswered) return;
+  quizAnswered = true;
+  const q = quizPool[quizIdx];
+  const correct = i === q.ans;
+  if (correct) quizScore++;
+  quizHistory.push({ q, chosen: i, correct });
+
+  // Color options
+  q.opts.forEach((_, j) => {
+    const el = document.getElementById('qopt-' + j);
+    el.style.cursor = 'default';
+    if (j === q.ans) { el.style.borderColor = 'var(--accent)'; el.style.background = 'rgba(62,207,142,0.1)'; }
+    else if (j === i && !correct) { el.style.borderColor = 'var(--red)'; el.style.background = 'rgba(255,107,107,0.1)'; }
+  });
+
+  const fb = document.getElementById('q-feedback');
+  fb.style.display = 'block';
+  fb.innerHTML = `
+    <div style="padding:0.75rem 1rem; border-radius:8px; border:1px solid ${correct ? 'rgba(62,207,142,0.3)' : 'rgba(255,107,107,0.3)'};
+      background:${correct ? 'rgba(62,207,142,0.08)' : 'rgba(255,107,107,0.08)'};">
+      <div style="font-weight:600; color:${correct ? 'var(--accent)' : 'var(--red)'}; margin-bottom:0.35rem;">
+        ${correct ? '✓ Correct!' : '✗ Incorrect'}
+      </div>
+      <div style="font-size:0.83rem; color:var(--muted); line-height:1.5;">${q.exp}</div>
+    </div>`;
+
+  document.getElementById('q-score').textContent = quizScore;
+  document.getElementById('q-next-btn').style.display = 'inline-block';
+  document.getElementById('q-next-btn').textContent = quizIdx < quizPool.length - 1 ? 'Next →' : 'See Results →';
+}
+
+function nextQuestion() {
+  quizIdx++;
+  if (quizIdx >= quizPool.length) { endQuiz(); return; }
+  renderQuestion();
+}
+
+function endQuiz() {
+  document.getElementById('quiz-active').style.display = 'none';
+  document.getElementById('quiz-results').style.display = 'block';
+  const total = quizHistory.length;
+  const score = quizHistory.filter(h => h.correct).length;
+  const pct = total > 0 ? Math.round(score / total * 100) : 0;
+  const grades = [[90,'Excellent — AP-ready!','var(--accent)'],[75,'Good — review your misses','var(--blue)'],[60,'Developing — study the explanations','var(--amber)'],[0,'Keep practicing — revisit each tab','var(--red)']];
+  const [,gradeLabel, gradeColor] = grades.find(([min]) => pct >= min);
+  document.getElementById('res-score-display').innerHTML = `<span style="color:${gradeColor}">${score}/${total}</span>`;
+  document.getElementById('res-grade').textContent = `${pct}% — ${gradeLabel}`;
+
+  const breakdown = document.getElementById('res-breakdown');
+  breakdown.innerHTML = quizHistory.map((h, i) => `
+    <div class="card" style="padding:1rem; margin-bottom:0.5rem; border-color:${h.correct ? 'rgba(62,207,142,0.2)' : 'rgba(255,107,107,0.2)'};">
+      <div style="display:flex; gap:0.75rem; align-items:flex-start;">
+        <span style="color:${h.correct ? 'var(--accent)' : 'var(--red)'}; font-size:1rem; min-width:20px;">${h.correct ? '✓' : '✗'}</span>
+        <div>
+          <div style="font-size:0.85rem; margin-bottom:0.35rem;">${h.q.stem}</div>
+          ${!h.correct ? `<div style="font-size:0.78rem; color:var(--muted);">Your answer: <span class="red">${h.q.opts[h.chosen]}</span> | Correct: <span class="accent">${h.q.opts[h.q.ans]}</span></div>` : ''}
+          <div style="font-size:0.78rem; color:var(--muted); margin-top:0.25rem;">${h.q.exp}</div>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function showQuizStart() {
+  document.getElementById('quiz-start-screen').style.display = 'block';
+  document.getElementById('quiz-active').style.display = 'none';
+  document.getElementById('quiz-results').style.display = 'none';
+}
+
+// ==================== TAB SWITCHING ====================
+function showTab(id) {
+  document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  const tabs = ['ph-scale','notation','theories','conjugate','strength','buffer','ice','polyprotic','salt','kw','quiz'];
+  const idx = tabs.indexOf(id);
+  if (idx >= 0) document.querySelectorAll('.tab')[idx].classList.add('active');
+  if (id === 'strength')   { setTimeout(() => { updateDissociation(); updateKa(); }, 50); }
+  if (id === 'buffer')     { setTimeout(drawTitration, 50); }
+  if (id === 'ice')        { setTimeout(updateICE, 50); }
+  if (id === 'polyprotic') { setTimeout(updatePolyprotic, 50); }
+  if (id === 'salt')       { setTimeout(updateSalt, 50); }
+  if (id === 'kw')         { setTimeout(() => { updateKwTemp(); drawKwCurve(); }, 50); }
+}
+
+// ==================== CONJUGATE PAIR Ka/Kb CALCULATOR ====================
+function calcConjPair(from) {
+  let Ka, pKa;
+  if (from === 'ka') {
+    Ka = parseFloat(document.getElementById('cpair-ka').value);
+    if (isNaN(Ka) || Ka <= 0) return;
+    pKa = -Math.log10(Ka);
+    document.getElementById('cpair-pka').value = pKa.toFixed(3);
+  } else {
+    pKa = parseFloat(document.getElementById('cpair-pka').value);
+    if (isNaN(pKa)) return;
+    Ka = Math.pow(10, -pKa);
+    document.getElementById('cpair-ka').value = Ka.toExponential(2);
+  }
+  const Kb = 1e-14 / Ka;
+  const pKb = 14 - pKa;
+  document.getElementById('cpair-result').style.display = 'block';
+  document.getElementById('cp-ka').textContent = toSci(Ka);
+  document.getElementById('cp-pka').textContent = pKa.toFixed(3);
+  document.getElementById('cp-kb').textContent = toSci(Kb);
+  document.getElementById('cp-pkb').textContent = pKb.toFixed(3);
+  const strength = Ka > 1e-3 ? 'moderately strong' : Ka > 1e-7 ? 'weak' : 'very weak';
+  const conjStrength = Kb < 1e-10 ? 'extremely weak' : Kb < 1e-7 ? 'very weak' : 'weak';
+  document.getElementById('cp-note').innerHTML =
+    `This is a <strong>${strength}</strong> acid. Its conjugate base is <strong>${conjStrength}</strong> (Kb = ${toSci(Kb)}). Check: pKa + pKb = ${pKa.toFixed(3)} + ${pKb.toFixed(3)} = <strong style="color:var(--accent)">${(pKa+pKb).toFixed(2)}</strong> ≈ 14 ✓`;
+}
+
+// ==================== IMPROVED DISSOCIATION MODEL ====================
+function updateDissociation() {
+  const type = document.getElementById('dis-sel').value;
+  const canvas = document.getElementById('dis-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || 500;
+  const W = canvas.width, H = 180;
+  canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+
+  const configs = {
+    'strong-acid': { pct:1.0,   label:'HCl → H⁺ + Cl⁻',                info:'100% dissociation — all molecules split. No HCl remains.', intactColor:'#ff6b6b', intactLabel:'HCl', ion1Color:'#ffaaaa', ion1Label:'H⁺', ion2Color:'#ff8866', ion2Label:'Cl⁻' },
+    'weak-acid':   { pct:0.05,  label:'CH₃COOH ⇌ H⁺ + CH₃COO⁻',        info:'~5% dissociation at 0.1 M (Ka = 1.8×10⁻⁵). Most molecules remain intact.', intactColor:'#f5a623', intactLabel:'CH₃COOH', ion1Color:'#ffd080', ion1Label:'H⁺', ion2Color:'#ffbf44', ion2Label:'CH₃COO⁻' },
+    'strong-base': { pct:1.0,   label:'NaOH → Na⁺ + OH⁻',              info:'100% dissociation — strong electrolyte. No intact NaOH remains.', intactColor:'#5b9cf6', intactLabel:'NaOH', ion1Color:'#88bbff', ion1Label:'Na⁺', ion2Color:'#aaccff', ion2Label:'OH⁻' },
+    'weak-base':   { pct:0.013, label:'NH₃ + H₂O ⇌ NH₄⁺ + OH⁻',       info:'~1.3% reaction at 0.1 M (Kb = 1.8×10⁻⁵). Most NH₃ remains unreacted.', intactColor:'#a0c4ff', intactLabel:'NH₃', ion1Color:'#c8daff', ion1Label:'NH₄⁺', ion2Color:'#d0e8ff', ion2Label:'OH⁻' },
+  };
+  const cfg = configs[type];
+  const total = 40, cols = 10, rows = 4;
+  const dissociated = Math.round(total * cfg.pct);
+  const intact = total - dissociated;
+  const cellW = (W - 20) / cols, cellH = (H - 30) / rows;
+  const r = Math.min(cellW, cellH) * 0.30;
+
+  let idx = 0;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const cx = 10 + col * cellW + cellW / 2;
+      const cy = 10 + row * cellH + cellH / 2;
+      if (idx < intact) {
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.fillStyle = cfg.intactColor + '33'; ctx.strokeStyle = cfg.intactColor;
+        ctx.lineWidth = 1.5; ctx.fill(); ctx.stroke();
+      } else {
+        const sr = r * 0.52, gap = sr * 0.75;
+        ctx.beginPath(); ctx.arc(cx - gap, cy, sr, 0, Math.PI*2);
+        ctx.fillStyle = cfg.ion1Color + '66'; ctx.strokeStyle = cfg.ion1Color;
+        ctx.lineWidth = 1.5; ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx + gap, cy, sr, 0, Math.PI*2);
+        ctx.fillStyle = cfg.ion2Color + '66'; ctx.strokeStyle = cfg.ion2Color;
+        ctx.fill(); ctx.stroke();
+      }
+      idx++;
+    }
+  }
+
+  const legendEl = document.getElementById('dis-legend');
+  if (legendEl) legendEl.innerHTML = `
+    <span style="display:inline-flex;align-items:center;gap:5px;">
+      <span style="width:12px;height:12px;border-radius:50%;background:${cfg.intactColor}33;border:1.5px solid ${cfg.intactColor};display:inline-block;"></span>
+      <span style="color:var(--muted);">${cfg.intactLabel} intact — ${intact}/${total}</span>
+    </span>
+    <span style="display:inline-flex;align-items:center;gap:5px;margin-left:1rem;">
+      <span style="width:9px;height:9px;border-radius:50%;background:${cfg.ion1Color}66;border:1.5px solid ${cfg.ion1Color};display:inline-block;"></span>
+      <span style="width:9px;height:9px;border-radius:50%;background:${cfg.ion2Color}66;border:1.5px solid ${cfg.ion2Color};display:inline-block;"></span>
+      <span style="color:var(--muted);">${cfg.ion1Label} + ${cfg.ion2Label} ions — ${dissociated}/${total}</span>
+    </span>`;
+  document.getElementById('dis-info').innerHTML =
+    `<strong style="color:${cfg.intactColor}">${cfg.label}</strong><br>${cfg.info}`;
+}
+
+// ==================== POLYPROTIC ACIDS ====================
+const polyAcids = {
+  h2co3:  { name:'H₂CO₃',    steps:[
+    { eq:'H₂CO₃ ⇌ H⁺ + HCO₃⁻',   Ka:4.3e-7,  label:'Ka₁', reactant:'H₂CO₃',  product:'HCO₃⁻', strong:false },
+    { eq:'HCO₃⁻ ⇌ H⁺ + CO₃²⁻',   Ka:4.7e-11, label:'Ka₂', reactant:'HCO₃⁻',  product:'CO₃²⁻', strong:false },
+  ]},
+  h2so4:  { name:'H₂SO₄',    steps:[
+    { eq:'H₂SO₄ → H⁺ + HSO₄⁻',    Ka:1e6,     label:'Ka₁ (strong)', reactant:'H₂SO₄', product:'HSO₄⁻', strong:true },
+    { eq:'HSO₄⁻ ⇌ H⁺ + SO₄²⁻',   Ka:1.2e-2,  label:'Ka₂', reactant:'HSO₄⁻',  product:'SO₄²⁻', strong:false },
+  ]},
+  h3po4:  { name:'H₃PO₄',    steps:[
+    { eq:'H₃PO₄ ⇌ H⁺ + H₂PO₄⁻',  Ka:7.5e-3,  label:'Ka₁', reactant:'H₃PO₄',  product:'H₂PO₄⁻', strong:false },
+    { eq:'H₂PO₄⁻ ⇌ H⁺ + HPO₄²⁻', Ka:6.2e-8,  label:'Ka₂', reactant:'H₂PO₄⁻', product:'HPO₄²⁻', strong:false },
+    { eq:'HPO₄²⁻ ⇌ H⁺ + PO₄³⁻',  Ka:4.8e-13, label:'Ka₃', reactant:'HPO₄²⁻', product:'PO₄³⁻',  strong:false },
+  ]},
+  h2s:    { name:'H₂S',       steps:[
+    { eq:'H₂S ⇌ H⁺ + HS⁻',        Ka:1.0e-7,  label:'Ka₁', reactant:'H₂S',    product:'HS⁻',  strong:false },
+    { eq:'HS⁻ ⇌ H⁺ + S²⁻',        Ka:1.0e-19, label:'Ka₂', reactant:'HS⁻',    product:'S²⁻',  strong:false },
+  ]},
+  oxalic: { name:'H₂C₂O₄',   steps:[
+    { eq:'H₂C₂O₄ ⇌ H⁺ + HC₂O₄⁻', Ka:5.9e-2,  label:'Ka₁', reactant:'H₂C₂O₄', product:'HC₂O₄⁻', strong:false },
+    { eq:'HC₂O₄⁻ ⇌ H⁺ + C₂O₄²⁻', Ka:6.4e-5,  label:'Ka₂', reactant:'HC₂O₄⁻', product:'C₂O₄²⁻', strong:false },
+  ]},
+};
+
+function updatePolyprotic() {
+  const key = document.getElementById('poly-sel').value;
+  const C = parseInt(document.getElementById('poly-conc').value) / 1000;
+  document.getElementById('poly-conc-val').textContent = C.toFixed(3) + ' M';
+  const acid = polyAcids[key];
+
+  const colors = ['var(--red)','var(--amber)','var(--blue)'];
+  const chipClasses = ['chip-red','chip-amber','chip-blue'];
+  document.getElementById('poly-steps').innerHTML = acid.steps.map((s, i) => {
+    const kaStr = s.strong ? '≫ 1 (complete)' : toSci(s.Ka);
+    const pKa = s.strong ? '< 0' : (-Math.log10(s.Ka)).toFixed(2);
+    return `<div class="card" style="margin-bottom:0.75rem;border-left:3px solid ${colors[i]};">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <span class="chip ${chipClasses[i]}">${s.label}</span>
+        <span class="mono" style="font-size:0.82rem;">${kaStr}</span>
+        <span style="font-size:0.8rem;color:var(--muted);">pKa = ${pKa}</span>
+      </div>
+      <div class="equation" style="margin:0;font-size:0.88rem;">${s.eq}</div>
+    </div>`;
+  }).join('');
+
+  // Step 1: solve quadratic (or complete for strong)
+  const step1 = acid.steps[0];
+  let h1;
+  if (step1.strong) {
+    h1 = C;
+  } else {
+    const Ka = step1.Ka;
+    h1 = (-Ka + Math.sqrt(Ka*Ka + 4*Ka*C)) / 2;
+  }
+
+  // Step 2 contribution ≈ Ka₂ (when Ka₂ << [H⁺] from step1)
+  let h2 = 0;
+  if (acid.steps.length > 1 && !acid.steps[1].strong) {
+    h2 = acid.steps[1].Ka;
+  }
+
+  const hTot = h1 + h2;
+  const pH = -Math.log10(Math.max(hTot, 1e-14));
+  document.getElementById('poly-h1').textContent = toSci(h1) + ' M';
+  document.getElementById('poly-h2').textContent = h2 > 0 ? toSci(h2) + ' M (≈ Ka₂)' : 'negligible';
+  document.getElementById('poly-htot').textContent = toSci(hTot) + ' M';
+  document.getElementById('poly-ph').textContent = pH.toFixed(2);
+  document.getElementById('poly-dominant').textContent = step1.product;
+  const ratio2pct = h1 > 0 ? (h2 / h1 * 100) : 0;
+  document.getElementById('poly-note').innerHTML =
+    `Step 2 contributes <strong>${ratio2pct < 0.1 ? '< 0.1%' : ratio2pct.toFixed(1) + '%'}</strong> of total [H⁺]. ${ratio2pct < 5 ? 'Safe to ignore — pH determined by Ka₁ alone.' : 'Significant — include Ka₂ for accuracy.'}`;
+
+  // Species distribution (simplified)
+  const Ka1 = step1.strong ? 1e6 : step1.Ka;
+  const alpha1 = h1 / (h1 + (Ka1 > 1 ? 0 : C - h1));
+  const fracHA  = Math.max(0, 1 - alpha1);
+  const fracA1  = acid.steps.length > 1 ? Math.min(alpha1, 0.999) * 0.99 : alpha1;
+  const fracA2  = acid.steps.length > 1 ? alpha1 * 0.01 : 0;
+  const species = [[step1.reactant, fracHA, 'var(--red)'],
+                   [step1.product,  fracA1, 'var(--amber)']];
+  if (acid.steps.length > 1) species.push([acid.steps[1].product, fracA2, 'var(--blue)']);
+  document.getElementById('poly-species').innerHTML = species.map(([label, frac, color]) => `
+    <div style="margin-bottom:0.6rem;">
+      <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.25rem;">
+        <span class="mono">${label}</span><span style="color:var(--muted)">${(frac*100).toFixed(1)}%</span>
+      </div>
+      <div style="height:8px;background:var(--border);border-radius:4px;">
+        <div style="width:${Math.min(100,frac*100).toFixed(1)}%;height:100%;background:${color};border-radius:4px;transition:width 0.3s;"></div>
+      </div>
+    </div>`).join('');
+}
+
+// ==================== SALT HYDROLYSIS ====================
+const saltData = {
+  nacl:      { name:'NaCl',        aType:'strong', bType:'strong', Ka:null,    Kb:1.8e-5,  cation:'Na⁺',  anion:'Cl⁻',      wAcid:'HCl',       wBase:null },
+  nh4cl:     { name:'NH₄Cl',       aType:'strong', bType:'weak',   Ka:5.6e-10, Kb:1.8e-5,  cation:'NH₄⁺', anion:'Cl⁻',      wAcid:null,        wBase:'NH₃' },
+  nach3coo:  { name:'NaCH₃COO',    aType:'weak',   bType:'strong', Ka:1.8e-5,  Kb:null,    cation:'Na⁺',  anion:'CH₃COO⁻',  wAcid:'CH₃COOH',   wBase:null },
+  nacn:      { name:'NaCN',        aType:'weak',   bType:'strong', Ka:6.2e-10, Kb:null,    cation:'Na⁺',  anion:'CN⁻',      wAcid:'HCN',       wBase:null },
+  nh4ch3coo: { name:'NH₄CH₃COO',  aType:'weak',   bType:'weak',   Ka:1.8e-5,  Kb:1.8e-5,  cation:'NH₄⁺', anion:'CH₃COO⁻',  wAcid:'CH₃COOH',   wBase:'NH₃' },
+  na2co3:    { name:'Na₂CO₃',      aType:'weak',   bType:'strong', Ka:4.7e-11, Kb:null,    cation:'Na⁺',  anion:'CO₃²⁻',   wAcid:'HCO₃⁻',     wBase:null },
+  nahco3:    { name:'NaHCO₃',      aType:'weak',   bType:'strong', Ka:4.3e-7,  Kb:null,    cation:'Na⁺',  anion:'HCO₃⁻',   wAcid:'H₂CO₃',     wBase:null },
+  nh4f:      { name:'NH₄F',        aType:'weak',   bType:'weak',   Ka:6.8e-4,  Kb:1.8e-5,  cation:'NH₄⁺', anion:'F⁻',       wAcid:'HF',        wBase:'NH₃' },
+};
+
+function updateSalt() {
+  const key = document.getElementById('salt-sel').value;
+  const C = parseInt(document.getElementById('salt-conc').value) / 1000;
+  document.getElementById('salt-conc-val').textContent = C.toFixed(3) + ' M';
+  const s = saltData[key];
+  let pH, khStr, hStr, typeLabel, typeColor, steps, rxnHtml;
+
+  if (s.aType === 'strong' && s.bType === 'strong') {
+    pH = 7; khStr = 'N/A'; hStr = '1.00×10⁻⁷ M';
+    typeLabel = 'Neutral'; typeColor = 'var(--accent)';
+    steps = `Neither ${s.cation} nor ${s.anion} reacts with water. Both ions are spectators. pH = 7.00.`;
+    rxnHtml = `<div class="equation">${s.cation} and ${s.anion} → <span style="color:var(--muted)">no hydrolysis — both are spectator ions</span></div>`;
+
+  } else if (s.aType === 'strong' && s.bType === 'weak') {
+    // Cation (conjugate acid of weak base) hydrolyzes → acidic
+    const Kh = s.Ka;
+    const x = (-Kh + Math.sqrt(Kh*Kh + 4*Kh*C)) / 2;
+    pH = -Math.log10(x);
+    khStr = toSci(Kh); hStr = toSci(x) + ' M';
+    typeLabel = 'Acidic'; typeColor = 'var(--red)';
+    steps = `<strong style="color:var(--text)">${s.cation}</strong> is the conjugate acid of weak base ${s.wBase}.<br>
+      Hydrolysis: ${s.cation} + H₂O ⇌ H₃O⁺ + ${s.wBase}<br>
+      Kh = Kw / Kb(${s.wBase}) = 1×10⁻¹⁴ / ${toSci(s.Kb)} = ${toSci(Kh)}<br>
+      Solving ICE: [H⁺] = ${toSci(x)} M → <strong style="color:var(--accent)">pH = ${pH.toFixed(2)}</strong>`;
+    rxnHtml = `<div class="equation"><span class="eq-acid">${s.cation}</span> + H₂O <span class="eq-arrow">⇌</span> <span class="eq-conj-acid">H₃O⁺</span> + <span class="eq-conj-base">${s.wBase}</span></div>
+      <p style="font-size:0.8rem;color:var(--muted);margin-top:0.5rem;">${s.anion} is from a strong acid — spectator ion, no hydrolysis.</p>`;
+
+  } else if (s.aType === 'weak' && s.bType === 'strong') {
+    // Anion (conjugate base of weak acid) hydrolyzes → basic
+    const Kb_anion = 1e-14 / s.Ka;
+    const x = (-Kb_anion + Math.sqrt(Kb_anion*Kb_anion + 4*Kb_anion*C)) / 2;
+    const pOH = -Math.log10(x);
+    pH = 14 - pOH;
+    khStr = toSci(Kb_anion); hStr = toSci(Math.pow(10, -pH)) + ' M';
+    typeLabel = 'Basic'; typeColor = 'var(--blue)';
+    steps = `<strong style="color:var(--text)">${s.anion}</strong> is the conjugate base of weak acid ${s.wAcid}.<br>
+      Hydrolysis: ${s.anion} + H₂O ⇌ ${s.wAcid} + OH⁻<br>
+      Kb(${s.anion}) = Kw / Ka(${s.wAcid}) = 1×10⁻¹⁴ / ${toSci(s.Ka)} = ${toSci(Kb_anion)}<br>
+      Solving ICE: [OH⁻] = ${toSci(x)} M → pOH = ${pOH.toFixed(2)} → <strong style="color:var(--accent)">pH = ${pH.toFixed(2)}</strong>`;
+    rxnHtml = `<div class="equation"><span class="eq-base">${s.anion}</span> + H₂O <span class="eq-arrow">⇌</span> <span class="eq-conj-base">${s.wAcid}</span> + <span class="eq-conj-acid">OH⁻</span></div>
+      <p style="font-size:0.8rem;color:var(--muted);margin-top:0.5rem;">${s.cation} is from a strong base — spectator ion, no hydrolysis.</p>`;
+
+  } else {
+    // Weak acid + weak base — pH ≈ 7 + ½(pKb_base − pKa_acid) — using Ka of cation and Kb of anion
+    const Ka_cation = s.Ka;           // Ka of cation acting as acid
+    const Kb_anion  = 1e-14 / s.Ka;  // Kb of anion acting as base  
+    const Kb_wbase  = s.Kb;
+    const Ka_wacid  = s.Ka;
+    const pKa_c = -Math.log10(Ka_cation);
+    const pKb_a = -Math.log10(Kb_wbase);
+    pH = 7 + 0.5 * (pKb_a - pKa_c);
+    khStr = `Ka=${toSci(Ka_cation)}, Kb=${toSci(Kb_wbase)}`;
+    hStr = toSci(Math.pow(10, -pH)) + ' M';
+    const verdict = Math.abs(Ka_cation - Kb_wbase) < 1e-12 ? 'nearly neutral' : Ka_cation > Kb_wbase ? 'slightly acidic' : 'slightly basic';
+    typeLabel = pH < 6.9 ? 'Acidic' : pH > 7.1 ? 'Basic' : 'Neutral';
+    typeColor = pH < 6.9 ? 'var(--red)' : pH > 7.1 ? 'var(--blue)' : 'var(--accent)';
+    steps = `Both ${s.cation} and ${s.anion} hydrolyze. Use: pH ≈ 7 + ½(pKb − pKa)<br>
+      pKa(${s.cation}) = ${pKa_c.toFixed(2)}, pKb(${s.wBase}) = ${pKb_a.toFixed(2)}<br>
+      pH ≈ 7 + ½(${pKb_a.toFixed(2)} − ${pKa_c.toFixed(2)}) = <strong style="color:var(--accent)">${pH.toFixed(2)}</strong> (${verdict})<br>
+      When Ka = Kb exactly, pH = 7.00.`;
+    rxnHtml = `<div class="equation"><span class="eq-acid">${s.cation}</span> + H₂O <span class="eq-arrow">⇌</span> H₃O⁺ + <span class="eq-conj-base">${s.wBase}</span></div>
+      <div class="equation" style="margin-top:0.5rem;"><span class="eq-base">${s.anion}</span> + H₂O <span class="eq-arrow">⇌</span> <span class="eq-conj-base">${s.wAcid}</span> + OH⁻</div>
+      <p style="font-size:0.8rem;color:var(--muted);margin-top:0.75rem;">Both reactions compete. The larger constant dominates.</p>`;
+  }
+
+  document.getElementById('salt-type-badge').innerHTML =
+    `<span class="zone-badge" style="background:transparent;border-color:${typeColor};color:${typeColor};">${typeLabel}</span>`;
+  document.getElementById('salt-kh').textContent = khStr;
+  document.getElementById('salt-h').textContent = hStr;
+  document.getElementById('salt-ph').textContent = pH.toFixed(2);
+  document.getElementById('salt-poh').textContent = (14 - pH).toFixed(2);
+  document.getElementById('salt-analysis').innerHTML =
+    `<p style="font-size:0.84rem;color:var(--muted);">
+      <strong style="color:var(--text)">Cation:</strong> ${s.cation} &nbsp;|&nbsp;
+      <strong style="color:var(--text)">Anion:</strong> ${s.anion} &nbsp;|&nbsp;
+      <strong style="color:var(--text)">Parent acid:</strong> ${s.aType} &nbsp;|&nbsp;
+      <strong style="color:var(--text)">Parent base:</strong> ${s.bType}
+    </p>`;
+  document.getElementById('salt-rxn').innerHTML = rxnHtml;
+  document.getElementById('salt-steps').innerHTML = steps;
+}
+
+// ==================== Kw & TEMPERATURE ====================
+const kwData = [
+  [0,1.14e-15],[5,1.85e-15],[10,2.93e-15],[15,4.52e-15],
+  [20,6.81e-15],[25,1.01e-14],[30,1.47e-14],[37,2.42e-14],
+  [40,2.92e-14],[50,5.48e-14],[60,9.55e-14],[70,1.55e-13],
+  [80,2.43e-13],[90,3.55e-13],[100,5.13e-13],
+];
+
+function interpKw(T) {
+  if (T <= kwData[0][0]) return kwData[0][1];
+  if (T >= kwData[kwData.length-1][0]) return kwData[kwData.length-1][1];
+  for (let i = 0; i < kwData.length - 1; i++) {
+    if (T >= kwData[i][0] && T <= kwData[i+1][0]) {
+      const frac = (T - kwData[i][0]) / (kwData[i+1][0] - kwData[i][0]);
+      const logKw = Math.log10(kwData[i][1]) + frac * (Math.log10(kwData[i+1][1]) - Math.log10(kwData[i][1]));
+      return Math.pow(10, logKw);
+    }
+  }
+  return 1.01e-14;
+}
+
+function updateKwTemp() {
+  const T = parseInt(document.getElementById('kw-temp').value);
+  document.getElementById('kw-temp-val').textContent = T + '°C';
+  const Kw = interpKw(T);
+  const pKw = -Math.log10(Kw);
+  const neutralPH = pKw / 2;
+  document.getElementById('kw-val').textContent = toSci(Kw);
+  document.getElementById('kw-neutral-ph').textContent = neutralPH.toFixed(2);
+  document.getElementById('kw-pkw').textContent = pKw.toFixed(3);
+  document.getElementById('kw-status').textContent = 'Neutral (always)';
+  drawKwCurve();
+}
+
+function drawKwCurve() {
+  const canvas = document.getElementById('kw-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || 600;
+  const W = canvas.width, H = 180;
+  canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+  const pad = { t:20, r:30, b:36, l:46 };
+  const gW = W - pad.l - pad.r, gH = H - pad.t - pad.b;
+  const minPH = 6.0, maxPH = 7.6;
+  function toX(T) { return pad.l + T / 100 * gW; }
+  function toY(pH) { return pad.t + (1 - (pH - minPH) / (maxPH - minPH)) * gH; }
+
+  // Grid
+  for (let pH = 6.0; pH <= 7.6; pH += 0.5) {
+    const y = toY(pH);
+    ctx.strokeStyle = '#ffffff11'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + gW, y); ctx.stroke();
+    ctx.fillStyle = '#7a8499'; ctx.font = '10px monospace'; ctx.textAlign = 'right';
+    ctx.fillText(pH.toFixed(1), pad.l - 4, y + 4);
+  }
+  for (let T = 0; T <= 100; T += 20) {
+    const x = toX(T);
+    ctx.strokeStyle = '#ffffff11';
+    ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + gH); ctx.stroke();
+    ctx.fillStyle = '#7a8499'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(T + '°C', x, pad.t + gH + 14);
+  }
+  ctx.fillStyle = '#7a8499'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('Temperature', pad.l + gW / 2, H - 2);
+
+  // pH=7 reference
+  ctx.strokeStyle = '#ffffff33'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(pad.l, toY(7)); ctx.lineTo(pad.l + gW, toY(7)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#ffffff55'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('pH = 7', pad.l + 4, toY(7) - 5);
+
+  // Neutral pH curve
+  ctx.beginPath(); ctx.strokeStyle = '#3ecf8e'; ctx.lineWidth = 2.5;
+  kwData.forEach(([T, Kw], i) => {
+    const neutralPH = -Math.log10(Kw) / 2;
+    const x = toX(T), y = toY(neutralPH);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Current temp dot
+  const T = parseInt(document.getElementById('kw-temp').value);
+  const Kw = interpKw(T);
+  const nPH = -Math.log10(Kw) / 2;
+  ctx.beginPath(); ctx.arc(toX(T), toY(nPH), 5, 0, Math.PI * 2);
+  ctx.fillStyle = '#3ecf8e'; ctx.fill();
+  const labelX = toX(T) + (T > 70 ? -80 : 8);
+  ctx.fillStyle = '#3ecf8e'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
+  ctx.fillText(T + '°C → pH ' + nPH.toFixed(2), labelX, toY(nPH) - 7);
+}
+
+// ==================== CONJUGATE PAIRS QUIZ ====================
+const conjugatePairsQuestions = [
+  { stem:'What is the conjugate base of HNO₃?', opts:['NO₂⁻','NO₃⁻','HNO₂','H₂NO₃⁺'], ans:1, exp:'Remove one H⁺ from HNO₃: HNO₃ − H⁺ = NO₃⁻. This is the conjugate base.' },
+  { stem:'What is the conjugate acid of NH₃?', opts:['NH₂⁻','N²⁻','NH₄⁺','NH₂OH'], ans:2, exp:'Add one H⁺ to NH₃: NH₃ + H⁺ = NH₄⁺. This is the conjugate acid.' },
+  { stem:'In: H₂O + HCO₃⁻ ⇌ H₃O⁺ + CO₃²⁻ — identify the acid/conjugate base pair.', opts:['HCO₃⁻ and CO₃²⁻','H₂O and H₃O⁺','H₂O and CO₃²⁻','HCO₃⁻ and H₃O⁺'], ans:0, exp:'HCO₃⁻ donates H⁺ to become CO₃²⁻. They differ by one proton — that is the acid/conjugate base pair.' },
+  { stem:'What is the conjugate base of H₂SO₄?', opts:['SO₄²⁻','HSO₄⁻','H₂SO₃','SO₃²⁻'], ans:1, exp:'H₂SO₄ − H⁺ = HSO₄⁻. This is the first conjugate base (still acidic itself).' },
+  { stem:'Which pair are conjugate acid-base partners?', opts:['HCl and NaOH','NH₃ and NH₄⁺','H₂O and OH⁻ are not conjugates','HCl and Cl₂'], ans:1, exp:'NH₃ and NH₄⁺ differ by exactly one H⁺. That defines a conjugate pair. Note: H₂O and OH⁻ ARE also conjugates (H₂O − H⁺ = OH⁻).' },
+  { stem:'What is the conjugate acid of CO₃²⁻?', opts:['H₂CO₃','HCO₃⁻','CO₂','H₂O'], ans:1, exp:'Add one H⁺ to CO₃²⁻: CO₃²⁻ + H⁺ = HCO₃⁻. Conjugate acid = base + H⁺.' },
+  { stem:'In: CH₃COOH + H₂O ⇌ H₃O⁺ + CH₃COO⁻ — H₂O is acting as...', opts:['An acid (proton donor)','A base (proton acceptor)','A spectator','Both simultaneously'], ans:1, exp:'H₂O accepts a proton from CH₃COOH to form H₃O⁺. It is the Brønsted-Lowry base here. Its conjugate acid is H₃O⁺.' },
+  { stem:'Which statement about conjugate pairs is FALSE?', opts:['They differ by exactly one H⁺','A strong acid has a strong conjugate base','Ka × Kb = Kw for a conjugate pair','Conjugate base = acid − H⁺'], ans:1, exp:'FALSE: A strong acid has a WEAK conjugate base. The stronger the acid, the weaker its conjugate base — they are inversely related.' },
+  { stem:'What is the conjugate base of H₃PO₄?', opts:['PO₄³⁻','HPO₄²⁻','H₂PO₄⁻','H₄PO₄⁺'], ans:2, exp:'Remove one H⁺: H₃PO₄ − H⁺ = H₂PO₄⁻. This is the first conjugate base. (HPO₄²⁻ would be the second.)' },
+  { stem:'HCO₃⁻ is amphoteric. Which correctly shows it acting as an ACID?', opts:['HCO₃⁻ + H⁺ → H₂CO₃','HCO₃⁻ → H⁺ + CO₃²⁻','HCO₃⁻ + OH⁻ → H₂O','HCO₃⁻ accepts H⁺'], ans:1, exp:'When HCO₃⁻ donates H⁺ (acts as an acid), it becomes CO₃²⁻. Acting as a base, it accepts H⁺ to form H₂CO₃.' },
+  { stem:'If Ka of HA = 1.8×10⁻⁵, what is Kb of A⁻?', opts:['1.8×10⁻⁵','5.6×10⁻¹⁰','1.8×10⁻⁹','5.6×10⁻⁵'], ans:1, exp:'Kb = Kw / Ka = 1×10⁻¹⁴ / 1.8×10⁻⁵ = 5.6×10⁻¹⁰. The conjugate base of a weak acid is also weak.' },
+  { stem:'In: H₂O + H₂O ⇌ H₃O⁺ + OH⁻ — identify both conjugate pairs.', opts:['H₂O/H₃O⁺ and H₂O/OH⁻','H₃O⁺/OH⁻ only','H₂O/OH⁻ only','There are no conjugate pairs'], ans:0, exp:'Pair 1: one H₂O (acid) → OH⁻ (conjugate base). Pair 2: the other H₂O (base) → H₃O⁺ (conjugate acid). Two H₂O molecules play different roles.' },
+];
+
+// Extend startQuiz to handle conjugate mode
+const _origStartQuiz = startQuiz;
+function startQuiz(mode) {
+  if (mode === 'conjugate') {
+    document.getElementById('quiz-start-screen').style.display = 'none';
+    document.getElementById('quiz-active').style.display = 'block';
+    document.getElementById('quiz-results').style.display = 'none';
+    quizScore = 0; quizIdx = 0; quizHistory = [];
+    quizPool = shuffle([...conjugatePairsQuestions]);
+    renderQuestion();
+    return;
+  }
+  _origStartQuiz(mode);
+}
+
+// Fix topic label for conjugate questions
+const _origRenderQuestion = renderQuestion;
+function renderQuestion() {
+  _origRenderQuestion();
+  // Override topic label if it's a conjugate question
+  const q = quizPool[quizIdx];
+  if (q && !q.topic) {
+    document.getElementById('q-topic-label').textContent = 'Conjugate Pairs';
+  }
+}
+</script>
+</body>
+</html>
