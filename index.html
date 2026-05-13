@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RasDuppy — Interactive Learning Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0d1318;
+    --surface2: #131b24;
+    --grid: rgba(255,255,255,0.03);
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #e4edf7;
+    --muted: #5a7080;
+    --dim: #2a3a48;
+ 
+    --c1: #3ecf8e;  /* study suite — teal */
+    --c2: #ff7043;  /* acid-base — orange-red */
+    --c3: #ce93d8;  /* butterfly — lilac */
+    --c4: #4fc3f7;  /* stellar — sky */
+ 
+    --mono: 'Space Mono', monospace;
+    --sans: 'Sora', sans-serif;
+  }
+ 
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+ 
+  /* ── Grid background ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+  }
+ 
+  /* ── Radial glow ── */
+  body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(62,207,142,0.07) 0%, transparent 70%);
+    pointer-events: none;
+  }
+ 
+  /* ── Header ── */
+  header {
+    position: relative; z-index: 10;
+    padding: 4rem 2rem 2rem;
+    text-align: center;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+ 
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--c1);
+    border: 1px solid rgba(62,207,142,0.3);
+    border-radius: 100px;
+    padding: 0.3rem 1rem;
+    margin-bottom: 1.5rem;
+    animation: fadeUp 0.6s ease both;
+  }
+ 
+  h1 {
+    font-size: clamp(2.2rem, 6vw, 4rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    animation: fadeUp 0.6s 0.1s ease both;
+    margin-bottom: 1rem;
+  }
+ 
+  h1 em {
+    font-style: normal;
+    background: linear-gradient(90deg, var(--c1), var(--c4));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+ 
+  .subtitle {
+    font-size: 1rem;
+    color: var(--muted);
+    font-weight: 300;
+    max-width: 480px;
+    margin: 0 auto 3rem;
+    line-height: 1.7;
+    animation: fadeUp 0.6s 0.2s ease both;
+  }
+ 
+  /* ── Divider ── */
+  .divider {
+    position: relative; z-index: 10;
+    display: flex; align-items: center; gap: 1rem;
+    max-width: 900px; margin: 0 auto 2rem;
+    padding: 0 2rem;
+    animation: fadeUp 0.6s 0.25s ease both;
+  }
+  .divider span { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.14em; color: var(--muted); white-space: nowrap; }
+  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+ 
+  /* ── Cards grid ── */
+  .grid {
+    position: relative; z-index: 10;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.25rem;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 2rem 4rem;
+  }
+ 
+  .card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.75rem;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    animation: fadeUp 0.5s ease both;
+  }
+ 
+  .card:nth-child(1) { animation-delay: 0.3s; }
+  .card:nth-child(2) { animation-delay: 0.38s; }
+  .card:nth-child(3) { animation-delay: 0.46s; }
+  .card:nth-child(4) { animation-delay: 0.54s; }
+ 
+  .card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 0% 0%, var(--card-glow) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+ 
+  .card:hover { transform: translateY(-4px); box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+  .card:hover::before { opacity: 1; }
+ 
+  .card-1 { --card-glow: rgba(62,207,142,0.12); }
+  .card-2 { --card-glow: rgba(255,112,67,0.12); }
+  .card-3 { --card-glow: rgba(206,147,216,0.12); }
+  .card-4 { --card-glow: rgba(79,195,247,0.12); }
+ 
+  .card:hover { border-color: var(--card-accent); }
+  .card-1 { --card-accent: rgba(62,207,142,0.4); }
+  .card-2 { --card-accent: rgba(255,112,67,0.4); }
+  .card-3 { --card-accent: rgba(206,147,216,0.4); }
+  .card-4 { --card-accent: rgba(79,195,247,0.4); }
+ 
+  /* ── Top accent bar ── */
+  .card-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+  }
+  .card-1 .card-bar { background: linear-gradient(90deg, var(--c1), transparent); }
+  .card-2 .card-bar { background: linear-gradient(90deg, var(--c2), transparent); }
+  .card-3 .card-bar { background: linear-gradient(90deg, var(--c3), transparent); }
+  .card-4 .card-bar { background: linear-gradient(90deg, var(--c4), transparent); }
+ 
+  /* ── Card icon ── */
+  .card-icon {
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1.25rem;
+    flex-shrink: 0;
+  }
+  .card-1 .card-icon { background: rgba(62,207,142,0.1); border: 1px solid rgba(62,207,142,0.2); }
+  .card-2 .card-icon { background: rgba(255,112,67,0.1); border: 1px solid rgba(255,112,67,0.2); }
+  .card-3 .card-icon { background: rgba(206,147,216,0.1); border: 1px solid rgba(206,147,216,0.2); }
+  .card-4 .card-icon { background: rgba(79,195,247,0.1); border: 1px solid rgba(79,195,247,0.2); }
+ 
+  .card-meta {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .card-1 .card-meta { color: var(--c1); }
+  .card-2 .card-meta { color: var(--c2); }
+  .card-3 .card-meta { color: var(--c3); }
+  .card-4 .card-meta { color: var(--c4); }
+ 
+  .card-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.6rem;
+    line-height: 1.2;
+  }
+ 
+  .card-desc {
+    font-size: 0.84rem;
+    color: var(--muted);
+    line-height: 1.6;
+    flex: 1;
+    margin-bottom: 1.5rem;
+  }
+ 
+  /* ── Tag pills ── */
+  .card-tags {
+    display: flex; flex-wrap: wrap; gap: 0.35rem;
+    margin-bottom: 1.5rem;
+  }
+  .tag {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 100px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--muted);
+  }
+ 
+  /* ── CTA row ── */
+  .card-cta {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+ 
+  .card-status {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  .dot-live { background: var(--c1); box-shadow: 0 0 6px var(--c1); }
+  .dot-wip  { background: var(--amber, #f5a623); box-shadow: 0 0 6px #f5a623; animation-delay: 0.5s; }
+ 
+  .card-arrow {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem;
+    color: var(--muted);
+    transition: border-color 0.2s, color 0.2s, transform 0.2s;
+  }
+  .card:hover .card-arrow {
+    transform: translate(2px, -2px);
+    color: var(--text);
+    border-color: var(--card-accent);
+  }
+ 
+  /* ── WIP overlay ── */
+  .wip-card {
+    pointer-events: auto;
+    opacity: 0.6;
+    filter: saturate(0.5);
+  }
+  .wip-card:hover { transform: none; opacity: 0.7; }
+ 
+  /* ── Footer ── */
+  footer {
+    position: relative; z-index: 10;
+    text-align: center;
+    padding: 2rem;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+    border-top: 1px solid var(--border);
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--c1); }
+ 
+  /* ── Animations ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+ 
+  /* ── Mobile ── */
+  @media (max-width: 520px) {
+    header { padding: 3rem 1.5rem 1.5rem; }
+    .grid { padding: 0 1.25rem 3rem; gap: 1rem; }
+    h1 { font-size: 2rem; }
+  }
+</style>
+</head>
+<body>
+ 
+<header>
+  <div class="badge">rasduppy.github.io</div>
+  <h1>Interactive<br><em>Learning Lab</em></h1>
+  <p class="subtitle">Science &amp; education tools built for students. Pick a module below to explore.</p>
+</header>
+ 
+<div class="divider">
+  <span>modules</span>
+</div>
+ 
+<div class="grid">
+ 
+  <!-- Study Suite -->
+  <a class="card card-1" href="./StudyGuide/cr-shell.html">
+    <div class="card-bar"></div>
+    <div class="card-icon">🎯</div>
+    <div class="card-meta">Study Tools</div>
+    <div class="card-title">StudyReview Suite</div>
+    <div class="card-desc">Jeopardy, Millionaire, Flashcards, Wordle, Crossword, and more — all driven by your own CSV question bank. Works for any subject.</div>
+    <div class="card-tags">
+      <span class="tag">Jeopardy</span>
+      <span class="tag">Flashcards</span>
+      <span class="tag">Wordle</span>
+      <span class="tag">Connections</span>
+      <span class="tag">Millionaire</span>
+      <span class="tag">CSV Import</span>
+    </div>
+    <div class="card-cta">
+      <div class="card-status">
+        <span class="dot dot-live"></span>
+        <span style="color:#3ecf8e;">Live</span>
+      </div>
+      <div class="card-arrow">↗</div>
+    </div>
+  </a>
+ 
+  <!-- Acid-Base -->
+  <a class="card card-2" href="./acid-base/index.html">
+    <div class="card-bar"></div>
+    <div class="card-icon">⚗️</div>
+    <div class="card-meta">Chemistry</div>
+    <div class="card-title">Acid / Base Workshop</div>
+    <div class="card-desc">Interactive pH explorer, ICE tables, titration simulator, conjugate pairs, salt hydrolysis, polyprotic acids — with built-in quizzes.</div>
+    <div class="card-tags">
+      <span class="tag">pH Scale</span>
+      <span class="tag">ICE Tables</span>
+      <span class="tag">Titration</span>
+      <span class="tag">Buffers</span>
+      <span class="tag">Quiz</span>
+    </div>
+    <div class="card-cta">
+      <div class="card-status">
+        <span class="dot dot-wip"></span>
+        <span style="color:#f5a623;">In Progress</span>
+      </div>
+      <div class="card-arrow">↗</div>
+    </div>
+  </a>
+ 
+  <!-- Butterfly -->
+  <a class="card card-3 wip-card" href="./butterfly/index.html">
+    <div class="card-bar"></div>
+    <div class="card-icon">🦋</div>
+    <div class="card-meta">Biology</div>
+    <div class="card-title">Butterfly Game</div>
+    <div class="card-desc">Coming soon — an interactive biology learning experience focused on butterfly life cycles and classification.</div>
+    <div class="card-tags">
+      <span class="tag">Life Cycle</span>
+      <span class="tag">Classification</span>
+      <span class="tag">Interactive</span>
+    </div>
+    <div class="card-cta">
+      <div class="card-status">
+        <span class="dot dot-wip"></span>
+        <span style="color:#f5a623;">Coming Soon</span>
+      </div>
+      <div class="card-arrow">↗</div>
+    </div>
+  </a>
+ 
+  <!-- Stellar Nursery -->
+  <a class="card card-4 wip-card" href="./stellar-nursery/index.html">
+    <div class="card-bar"></div>
+    <div class="card-icon">🌌</div>
+    <div class="card-meta">Astronomy</div>
+    <div class="card-title">Stellar Nursery</div>
+    <div class="card-desc">Coming soon — explore star formation, nebulae, and the life cycle of stars in an interactive astronomy simulation.</div>
+    <div class="card-tags">
+      <span class="tag">Star Formation</span>
+      <span class="tag">Nebulae</span>
+      <span class="tag">Life Cycles</span>
+      <span class="tag">Simulation</span>
+    </div>
+    <div class="card-cta">
+      <div class="card-status">
+        <span class="dot dot-wip"></span>
+        <span style="color:#f5a623;">Coming Soon</span>
+      </div>
+      <div class="card-arrow">↗</div>
+    </div>
+  </a>
+ 
+</div>
+ 
+<footer>
+  <a href="https://github.com/RasDuppy/RasDuppy.github.io" target="_blank">github.com/RasDuppy</a>
+  &nbsp;·&nbsp; built with ♥ for students
+</footer>
+ 
+</body>
+</html>
