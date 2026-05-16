@@ -61,6 +61,24 @@ body{font-family:'Space Mono',monospace;background:var(--bg);color:var(--text);h
 .dc-badge.earned{opacity:1;transform:scale(1.1);}
 .dc-badge:hover::after{content:attr(data-tip);position:fixed;left:300px;z-index:9999;background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-size:9px;color:var(--text);max-width:200px;line-height:1.5;pointer-events:none;white-space:normal;}
 
+/* BIRTH BUTTON */
+.birth-btn{width:100%;margin-top:8px;padding:8px 12px;font-family:'Syne',sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;border-radius:7px;border:1px solid rgba(160,96,240,.5);background:linear-gradient(135deg,rgba(80,30,140,.6),rgba(40,15,80,.8));color:var(--purple);cursor:pointer;transition:all .2s;}
+.birth-btn:hover:not(:disabled){border-color:var(--purple);color:#fff;background:linear-gradient(135deg,rgba(120,50,200,.7),rgba(80,30,140,.9));box-shadow:0 0 12px rgba(160,96,240,.3);}
+.birth-btn:disabled{opacity:.35;cursor:not-allowed;color:var(--text3);border-color:var(--border);}
+.birth-btn.active{border-color:var(--gold);color:var(--gold);background:linear-gradient(135deg,rgba(80,50,0,.6),rgba(40,25,0,.8));animation:pulse .9s ease-in-out infinite alternate;}
+.next-gen-btn{width:100%;margin-top:6px;padding:7px 12px;font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;border-radius:6px;border:1px solid rgba(48,200,240,.4);background:rgba(48,200,240,.07);color:var(--cyan);cursor:pointer;transition:all .15s;display:none;}
+.next-gen-btn:hover{border-color:var(--cyan);background:rgba(48,200,240,.15);}
+.cost-label{font-size:9px;color:rgba(160,96,240,.6);text-align:center;margin-top:3px;}
+
+/* OBJECTIVES */
+.obj-panel{background:linear-gradient(135deg,rgba(15,25,50,.7),rgba(10,20,40,.9));border:1px solid rgba(74,138,240,.2);border-radius:7px;padding:8px 10px;margin-top:0;}
+.obj-title{font-family:'Syne',sans-serif;font-size:8px;font-weight:700;letter-spacing:2px;color:rgba(74,138,240,.8);text-transform:uppercase;margin-bottom:6px;}
+.obj-item{display:flex;align-items:flex-start;gap:6px;padding:3px 0;font-size:9px;line-height:1.4;}
+.obj-icon{font-size:10px;flex-shrink:0;margin-top:1px;}
+.obj-text{color:var(--text2);}
+.obj-item.done .obj-text{color:var(--green);text-decoration:line-through;opacity:.7;}
+.obj-bonus{color:var(--gold);font-size:8px;margin-left:auto;white-space:nowrap;}
+
 /* SLIDERS */
 .sr{margin-bottom:11px;}
 .sh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
@@ -192,19 +210,30 @@ canvas{display:block;width:100%;height:100%;}
   <!-- NEBULA GAS POOL -->
   <div class="sbs">
     <div class="nebula-hud">
-      <div class="nebula-title">⬡ Stellar Nursery</div>
+      <div class="nebula-title">&#x2B21; Stellar Nursery</div>
       <div class="nebula-grid">
-        <div class="nebula-cell"><div class="nebula-label">Nebula Gas</div><div class="nebula-val" id="nGas">500 M☉</div></div>
+        <div class="nebula-cell"><div class="nebula-label">Nebula Gas</div><div class="nebula-val" id="nGas">500 M&#x2609;</div></div>
         <div class="nebula-cell"><div class="nebula-label">Generation</div><div class="nebula-val" id="nGen">Gen 1</div></div>
         <div class="nebula-cell"><div class="nebula-label">Metallicity</div><div class="nebula-val" id="nMetZ" style="color:var(--cyan)">Z=0.001</div></div>
-        <div class="nebula-cell"><div class="nebula-label">Returned</div><div class="nebula-val" id="nReturned" style="color:var(--green)">0 M☉</div></div>
+        <div class="nebula-cell"><div class="nebula-label">Returned</div><div class="nebula-val" id="nReturned" style="color:var(--green)">0 M&#x2609;</div></div>
       </div>
       <div class="nebula-bar-wrap">
         <div class="nebula-bar-label"><span>Gas remaining</span><span id="nGasPct">100%</span></div>
         <div class="nebula-bar"><div class="nebula-bar-fill" id="nGasBar" style="width:100%"></div></div>
       </div>
-      <div style="font-size:8px;color:rgba(160,96,240,.6);margin-bottom:5px;">Death types collected:</div>
+      <button class="birth-btn" id="birthBtn" onclick="birthStar()">&#x2B50; BIRTH A STAR</button>
+      <div class="cost-label" id="birthCost">Cost: 1.0 M&#x2609; from nebula</div>
+      <button class="next-gen-btn" id="nextGenBtn" onclick="nextGeneration()">&#x2736; NEW GENERATION &#x2192;</button>
+      <div style="font-size:8px;color:rgba(160,96,240,.6);margin:6px 0 3px;">Death types collected:</div>
       <div class="death-collector" id="deathCollector"></div>
+    </div>
+  </div>
+
+  <!-- OBJECTIVES -->
+  <div class="sbs" id="objSec" style="display:none">
+    <div class="obj-panel">
+      <div class="obj-title">&#x2691; Run Objectives</div>
+      <div id="objList"></div>
     </div>
   </div>
 
@@ -472,6 +501,12 @@ const S={
   // Nebula game state
   nebulaMass:500, nebulaZ:0.001, generation:1, massReturned:0,
   deathsEarned:new Set(),
+  // Game loop state
+  starBirthed:false,
+  starCost:0,
+  deathResolved:false,
+  runObjectives:[],
+  runHistory:[],
 };
 
 // ─── CANVAS ───────────────────────────────────────────────────────────────────
@@ -540,9 +575,172 @@ function resetSim(){
   clearInterval(S.playTimer);S.playing=false;
   document.getElementById('playBtn').textContent='▶ PLAY';
   document.getElementById('playBtn').classList.remove('on');
-  // Reset nebula for new run but keep enrichment as reward
-  S.massReturned=0;
+  // Full game reset — reset nebula entirely
+  S.nebulaMass=500;S.nebulaZ=0.001;S.generation=1;S.massReturned=0;
+  S.starBirthed=false;S.starCost=0;S.deathResolved=false;
+  S.runObjectives=[];S.runHistory=[];
+  S.deathsEarned.clear();
+  document.getElementById('nextGenBtn').style.display='none';
+  document.getElementById('birthBtn').classList.remove('active');
+  document.getElementById('objSec').style.display='none';
   onSlider();
+}
+
+// ─── GAME LOOP: BIRTH / DEATH / GENERATION ───────────────────────────────────
+// Objective pool — drawn randomly each run (3 per run)
+const OBJ_POOL=[
+  {id:'reach_giant',   label:'Reach giant phase',         test:s=>['Red Giant','Red Supergiant','LBV'].includes(s.phase), bonus:10},
+  {id:'reach_wr',      label:'Achieve Wolf-Rayet phase',  test:s=>s.phase==='Wolf-Rayet', bonus:15},
+  {id:'make_bh',       label:'Form a Black Hole',         test:s=>s.phase==='Black Hole', bonus:20},
+  {id:'make_ns',       label:'Create a Neutron Star',     test:s=>s.phase==='Neutron Star'||s.phase==='Magnetar', bonus:15},
+  {id:'make_wd',       label:'Create a White Dwarf',      test:s=>s.phase==='White Dwarf', bonus:10},
+  {id:'trigger_ia',    label:'Trigger Type Ia Supernova', test:s=>s.phase==='Type Ia Supernova', bonus:25},
+  {id:'trigger_pi',    label:'Trigger Pair-Instability SN',test:s=>s.phase==='Pair-Instability Supernova', bonus:35},
+  {id:'trigger_hflash',label:'Trigger Helium Flash',      test:s=>s.heliumFlash, bonus:12},
+  {id:'make_magnetar', label:'Produce a Magnetar',        test:s=>s.isMagnetar, bonus:20},
+  {id:'make_bd',       label:'Set a Brown Dwarf',         test:s=>s.isBD, bonus:8},
+  {id:'mass_over50',   label:'Use star > 50 M☉',         test:s=>s.M0>50, bonus:10},
+  {id:'mass_under1',   label:'Use star < 1 M☉',          test:s=>s.M0<1&&s.M0>=0.08, bonus:8},
+  {id:'high_spin',     label:'Reach vrot > 300 km/s',     test:s=>s.vr>300, bonus:10},
+  {id:'witness_lbv',   label:'Witness LBV eruption',      test:s=>s.phase==='LBV', bonus:12},
+  {id:'sn_cc',         label:'Trigger Core-Collapse SN',  test:s=>s.phase==='Supernova', bonus:15},
+];
+
+function drawObjectives(){
+  // Pick 3 unique objectives for this run
+  const pool=[...OBJ_POOL];
+  const picked=[];
+  while(picked.length<3&&pool.length>0){
+    const i=Math.floor(Math.random()*pool.length);
+    picked.push({...pool[i],done:false});
+    pool.splice(i,1);
+  }
+  S.runObjectives=picked;
+  renderObjectives();
+  document.getElementById('objSec').style.display='block';
+}
+
+function checkObjectives(star){
+  if(!S.runObjectives||S.runObjectives.length===0)return;
+  let changed=false;
+  S.runObjectives.forEach(obj=>{
+    if(!obj.done&&obj.test(star)){
+      obj.done=true;
+      changed=true;
+      S.nebulaMass+=obj.bonus;
+      // Flash notification in footer
+      const fLive=document.getElementById('fLive');
+      const prev=fLive.textContent;
+      fLive.textContent=`✓ OBJECTIVE: ${obj.label} — +${obj.bonus} M☉!`;
+      fLive.style.color='var(--green)';
+      setTimeout(()=>{fLive.style.color='';},3000);
+    }
+  });
+  if(changed)renderObjectives();
+}
+
+function renderObjectives(){
+  const sec=document.getElementById('objSec');
+  const list=document.getElementById('objList');
+  if(!S.runObjectives||S.runObjectives.length===0){sec.style.display='none';return;}
+  sec.style.display='block';
+  list.innerHTML=S.runObjectives.map(obj=>`
+    <div class="obj-item${obj.done?' done':''}">
+      <span class="obj-icon">${obj.done?'✓':'○'}</span>
+      <span class="obj-text">${obj.label}</span>
+      <span class="obj-bonus">+${obj.bonus}M☉</span>
+    </div>`).join('');
+}
+
+function birthStar(){
+  const M0=parseFloat(document.getElementById('sMass').value);
+  if(S.starBirthed&&!S.deathResolved)return; // star already running
+  if(S.nebulaMass<M0){
+    // Flash warning
+    document.getElementById('birthBtn').style.borderColor='var(--red)';
+    setTimeout(()=>document.getElementById('birthBtn').style.borderColor='',1000);
+    return;
+  }
+  // Spend mass
+  S.nebulaMass-=M0;
+  S.starCost=M0;
+  S.starBirthed=true;
+  S.deathResolved=false;
+  // Reset run
+  S.tFrac=0;S.trail=[];S.firedEvts.clear();S.lastPhase='';
+  clearInterval(S.playTimer);S.playing=false;
+  document.getElementById('playBtn').textContent='▶ PLAY';
+  document.getElementById('playBtn').classList.remove('on');
+  document.getElementById('birthBtn').classList.add('active');
+  document.getElementById('nextGenBtn').style.display='none';
+  // Sync Z slider to nebula Z
+  document.getElementById('sMet').value=S.nebulaZ;
+  // Draw objectives for this run
+  drawObjectives();
+  onSlider();
+  // Auto-start play
+  setTimeout(togglePlay,300);
+}
+
+const MASS_RETURN_PCT={
+  'White Dwarf':0.50,
+  'Type Ia Supernova':1.00,
+  'Supernova':0.90,
+  'Neutron Star':0.90,
+  'Magnetar':0.90,
+  'Black Hole':0.20,
+  'Pair-Instability Supernova':1.00,
+  'Brown Dwarf':1.00,
+};
+const Z_ENRICH={
+  'White Dwarf':0.0003,
+  'Type Ia Supernova':0.002,
+  'Supernova':0.001,
+  'Neutron Star':0.001,
+  'Magnetar':0.0015,
+  'Black Hole':0.0005,
+  'Pair-Instability Supernova':0.003,
+  'Brown Dwarf':0,
+};
+
+function resolveDeathReturn(star){
+  if(S.deathResolved||!S.starBirthed)return;
+  const pct=MASS_RETURN_PCT[star.phase];
+  if(pct===undefined)return;
+  S.deathResolved=true;
+  const returned=S.starCost*pct;
+  S.nebulaMass+=returned;
+  S.massReturned+=returned;
+  // Z enrichment
+  const dZ=Z_ENRICH[star.phase]||0;
+  S.nebulaZ=Math.min(0.030,S.nebulaZ+dZ);
+  // Add to run history
+  S.runHistory.unshift({gen:S.generation,phase:star.phase,M0:S.starCost,returned:returned.toFixed(1),nebulaZ:S.nebulaZ.toFixed(4)});
+  if(S.runHistory.length>10)S.runHistory.pop();
+  // Show next gen button
+  document.getElementById('nextGenBtn').style.display='block';
+  document.getElementById('birthBtn').classList.remove('active');
+}
+
+function nextGeneration(){
+  S.generation++;
+  S.starBirthed=false;
+  S.deathResolved=false;
+  S.starCost=0;
+  S.runObjectives=[];
+  // Reset simulation state
+  S.tFrac=0;S.trail=[];S.firedEvts.clear();S.lastPhase='';
+  clearInterval(S.playTimer);S.playing=false;
+  document.getElementById('playBtn').textContent='▶ PLAY';
+  document.getElementById('playBtn').classList.remove('on');
+  document.getElementById('birthBtn').classList.remove('active');
+  document.getElementById('nextGenBtn').style.display='none';
+  document.getElementById('objSec').style.display='none';
+  // Carry nebula Z to slider
+  document.getElementById('sMet').value=S.nebulaZ;
+  onSlider();
+  // Scroll nebula into view so player sees the enriched state
+  document.querySelector('.nebula-hud').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 function dismissEvent(){
@@ -796,6 +994,7 @@ function checkDeathCollector(phase,star){
     const bonus={'brown_dwarf':2,'white_dwarf':5,'type_ia':15,'core_collapse':10,
                  'neutron_star':8,'magnetar':12,'black_hole':5,'pair_instab':30}[deathId]||5;
     S.massReturned+=bonus;
+    S.nebulaMass+=bonus;
     S.nebulaZ=Math.min(0.030,S.nebulaZ+bonus*0.0001);
     // Flash the badge
     setTimeout(()=>{
@@ -876,7 +1075,7 @@ function answerQuiz(idx){
   S.quizAnswered=true;
   const q=QUIZ[S.quizIdx%QUIZ.length];
   const correct=idx===q.ans;
-  S.quizTotal++;if(correct){S.quizScore++;S.massReturned+=5;} // correct = nebula bonus
+  S.quizTotal++;if(correct){S.quizScore++;S.nebulaMass+=5;S.massReturned+=5;} // correct = nebula bonus
   const btns=document.querySelectorAll('.qopt');
   btns.forEach((b,i)=>{
     if(i===q.ans)b.classList.add('correct');
@@ -914,15 +1113,26 @@ function renderComp(){
 // ─── NEBULA HUD ───────────────────────────────────────────────────────────────
 function updateNebulaHUD(star){
   const M0=parseFloat(document.getElementById('sMass').value);
-  const spent=Math.min(M0,S.nebulaMass);
-  const effective=Math.max(0,S.nebulaMass-spent+S.massReturned);
-  const pct=Math.min(100,Math.max(0,(effective/500)*100));
-  document.getElementById('nGas').textContent=effective.toFixed(0)+' M☉';
+  // nebulaMass is the authoritative pool; massReturned is cumulative lifetime total
+  const pct=Math.min(100,Math.max(0,(S.nebulaMass/500)*100));
+  document.getElementById('nGas').textContent=S.nebulaMass.toFixed(1)+' M☉';
   document.getElementById('nGen').textContent='Gen '+S.generation;
   document.getElementById('nMetZ').textContent='Z='+S.nebulaZ.toFixed(4);
   document.getElementById('nReturned').textContent='+'+S.massReturned.toFixed(1)+' M☉';
   document.getElementById('nGasPct').textContent=pct.toFixed(0)+'%';
   document.getElementById('nGasBar').style.width=pct+'%';
+
+  // Birth button state
+  const bb=document.getElementById('birthBtn');
+  const cost=document.getElementById('birthCost');
+  cost.textContent='Cost: '+M0.toFixed(1)+' M☉ from nebula';
+  const canAfford=S.nebulaMass>=M0;
+  const runActive=S.starBirthed&&!S.deathResolved;
+  bb.disabled=!canAfford||runActive;
+  if(runActive){bb.textContent='⚙ STAR EVOLVING…';}
+  else if(!canAfford){bb.textContent='❌ INSUFFICIENT GAS';}
+  else{bb.textContent='⭐ BIRTH A STAR';}
+
   renderDeathCollector();
 }
 
@@ -933,6 +1143,11 @@ function onSlider(){
   checkEvents(star);
   checkAch(star);
   renderAch();
+  // Game loop: check objectives and resolve death returns
+  if(S.starBirthed){
+    checkObjectives(star);
+    resolveDeathReturn(star);
+  }
   updateNebulaHUD(star);
   if(S.activeSections.math)updateMath(star);
 
